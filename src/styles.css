@@ -890,6 +890,23 @@ summary:focus-visible {
   font-size: 0.66rem;
 }
 
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.modal-share-status {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.modal-share-status:empty {
+  display: none;
+}
+
 .modal-close {
   flex: 0 0 auto;
 }

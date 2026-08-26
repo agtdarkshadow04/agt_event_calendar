@@ -5,7 +5,7 @@ import { FilterBar } from './components/FilterBar';
 import { BUG_REPORT_URL, EVENT_DATABASE_URL } from './config';
 import { parseEventsCsv } from './lib/csv';
 import { filterEvents } from './lib/filter';
-import { withCacheBuster } from './lib/urls';
+import { withCacheBuster, withEventId } from './lib/urls';
 import type {
   CalendarEvent,
   DataWarning,
@@ -66,6 +66,19 @@ function App() {
     void loadEvents();
   }, [loadEvents]);
 
+  useEffect(() => {
+    const selectEventFromUrl = () => {
+      const eventId = new URL(window.location.href).searchParams.get('event_id');
+      setSelectedEvent(
+        eventId ? events.find((event) => event.id === eventId) ?? null : null,
+      );
+    };
+
+    selectEventFromUrl();
+    window.addEventListener('popstate', selectEventFromUrl);
+    return () => window.removeEventListener('popstate', selectEventFromUrl);
+  }, [events]);
+
   const filteredEvents = useMemo(
     () => filterEvents(events, filters),
     [events, filters],
@@ -76,7 +89,23 @@ function App() {
     ),
   ).length;
 
-  const closeSelectedEvent = useCallback(() => setSelectedEvent(null), []);
+  const selectEvent = useCallback((event: CalendarEvent) => {
+    setSelectedEvent(event);
+    window.history.replaceState(
+      window.history.state,
+      '',
+      withEventId(window.location.href, event.id),
+    );
+  }, []);
+
+  const closeSelectedEvent = useCallback(() => {
+    setSelectedEvent(null);
+    window.history.replaceState(
+      window.history.state,
+      '',
+      withEventId(window.location.href, null),
+    );
+  }, []);
 
   return (
     <div className="app-shell">
@@ -238,7 +267,7 @@ function App() {
                 events={filteredEvents}
                 viewDate={viewDate}
                 onViewDateChange={setViewDate}
-                onSelectEvent={setSelectedEvent}
+                onSelectEvent={selectEvent}
               />
             )}
           </>

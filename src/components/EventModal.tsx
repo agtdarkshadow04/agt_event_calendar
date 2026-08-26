@@ -5,6 +5,7 @@ import {
   markdownUrlTransform,
   safeExternalUrl,
   withCacheBuster,
+  withEventId,
 } from '../lib/urls';
 import type { CalendarEvent } from '../types';
 
@@ -55,6 +56,9 @@ export function EventModal({ selectedEvent, onClose }: EventModalProps) {
     'idle' | 'loading' | 'loaded' | 'error'
   >('idle');
   const [coverFailed, setCoverFailed] = useState(false);
+  const [shareState, setShareState] = useState<
+    'idle' | 'copying' | 'copied' | 'error'
+  >('idle');
 
   useEffect(() => {
     if (!selectedEvent) return;
@@ -100,6 +104,7 @@ export function EventModal({ selectedEvent, onClose }: EventModalProps) {
     setDescription('');
     setDescriptionState('idle');
     setCoverFailed(false);
+    setShareState('idle');
     if (!selectedEvent?.descriptionUrl) return;
 
     const controller = new AbortController();
@@ -132,6 +137,18 @@ export function EventModal({ selectedEvent, onClose }: EventModalProps) {
 
   const event = selectedEvent;
   const glyphToolUrl = buildGlyphToolUrl(event.galaxy, event.portalCode);
+  const shareEvent = async () => {
+    setShareState('copying');
+    try {
+      await navigator.clipboard.writeText(
+        withEventId(window.location.href, event.id),
+      );
+      setShareState('copied');
+    } catch (error: unknown) {
+      console.error('Unable to copy event URL', error);
+      setShareState('error');
+    }
+  };
 
   return (
     <div
@@ -156,15 +173,36 @@ export function EventModal({ selectedEvent, onClose }: EventModalProps) {
               {event.type} · {event.galaxy}
             </p>
           </div>
-          <button
-            ref={closeButtonRef}
-            className="button button-icon modal-close"
-            type="button"
-            onClick={onClose}
-            aria-label="Close event details"
-          >
-            <span aria-hidden="true">×</span>
-          </button>
+          <div className="modal-header-actions">
+            <span
+              className={`modal-share-status${shareState === 'error' ? ' error-note' : ''}`}
+              role={shareState === 'error' ? 'alert' : 'status'}
+              aria-live="polite"
+            >
+              {shareState === 'copied'
+                ? 'Event URL copied'
+                : shareState === 'error'
+                  ? 'Unable to copy URL'
+                  : ''}
+            </span>
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={() => void shareEvent()}
+              disabled={shareState === 'copying'}
+            >
+              Share
+            </button>
+            <button
+              ref={closeButtonRef}
+              className="button button-icon modal-close"
+              type="button"
+              onClick={onClose}
+              aria-label="Close event details"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
         </header>
 
         <div className="modal-scroll-region">

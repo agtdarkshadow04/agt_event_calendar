@@ -25,6 +25,16 @@ export function markdownUrlTransform(value: string): string {
   return safeExternalUrl(value) ?? '';
 }
 
+export function withEventId(value: string, eventId: string | null): string {
+  const url = new URL(value);
+  if (eventId === null) {
+    url.searchParams.delete('event_id');
+  } else {
+    url.searchParams.set('event_id', eventId);
+  }
+  return url.href;
+}
+
 export function withCacheBuster(value: string): string {
   const url = new URL(value, window.location.origin);
   url.searchParams.set('_agt_refresh', String(Date.now()));
