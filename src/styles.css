@@ -1005,6 +1005,38 @@ summary:focus-visible {
   font-size: 0.66rem;
 }
 
+.portal-code {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.portal-code-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.portal-link {
+  width: 1.55rem;
+  height: 1.55rem;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  color: var(--agt-orange);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.82rem;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.portal-link:hover {
+  color: #fff;
+  border-color: var(--agt-red);
+}
+
 .missing,
 .empty-note {
   color: #77716b;

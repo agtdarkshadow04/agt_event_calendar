@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { markdownUrlTransform, safeExternalUrl, withCacheBuster } from '../lib/urls';
+import {
+  buildGlyphToolUrl,
+  markdownUrlTransform,
+  safeExternalUrl,
+  withCacheBuster,
+} from '../lib/urls';
 import type { CalendarEvent } from '../types';
 
 interface EventModalProps {
@@ -126,6 +131,7 @@ export function EventModal({ selectedEvent, onClose }: EventModalProps) {
   if (!selectedEvent) return null;
 
   const event = selectedEvent;
+  const glyphToolUrl = buildGlyphToolUrl(event.galaxy, event.portalCode);
 
   return (
     <div
@@ -211,7 +217,22 @@ export function EventModal({ selectedEvent, onClose }: EventModalProps) {
               <DetailField label="Region" value={event.region} />
               <DetailField label="System" value={event.system} />
               <DetailField label="Planet" value={event.planet} optional />
-              <DetailField label="Portal code" value={event.portalCode} monospace />
+              <div className="detail-field">
+                <dt>Portal code</dt>
+                <dd className="monospace portal-code">
+                  <span className="portal-code-value">{event.portalCode}</span>
+                  <a
+                    className="portal-link"
+                    href={glyphToolUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open with Glyph Tool"
+                    aria-label="Open with Glyph Tool"
+                  >
+                    <span aria-hidden="true">↗</span>
+                  </a>
+                </dd>
+              </div>
             </dl>
           </section>
 

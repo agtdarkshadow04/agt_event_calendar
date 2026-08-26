@@ -1,5 +1,13 @@
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
 
+export function buildGlyphToolUrl(galaxy: string, portalCode: string): string {
+  const url = new URL('https://glyph.nms-agt.com/');
+  url.searchParams.set('embed', 'false');
+  url.searchParams.set('galaxy', galaxy);
+  url.searchParams.set('glyphs', portalCode);
+  return url.href;
+}
+
 export function safeExternalUrl(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
