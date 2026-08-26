@@ -121,7 +121,7 @@ function App() {
               rel="noopener noreferrer"
             >
               <span aria-hidden="true">◇</span>
-              Bug Report
+              Report Bugs
             </a>
           </div>
         </div>
@@ -130,12 +130,10 @@ function App() {
 
       <main id="main-content" className="main-content">
         <section className="intro" aria-labelledby="page-heading">
-          <p className="eyebrow">No Man's Sky community operations</p>
-          <h1 id="page-heading">Events across the galaxies</h1>
+          <h1 id="page-heading">AGT Special Events Calendar</h1>
           <p>
-            Browse AGT gatherings in your local time. Select any event for its
-            UTC schedule, host, portal address, destination, description, and
-            related links.
+            Search and browse past and upcoming AGT gatherings. Select any event to view its
+            schedule, portal address, and description.
           </p>
         </section>
 
@@ -173,14 +171,14 @@ function App() {
             <section className="data-meta" aria-label="Database status">
               <div>
                 <span className="data-count">{events.length}</span>
-                <span>{events.length === 1 ? 'validated event' : 'validated events'}</span>
+                <span>{events.length === 1 ? 'valid event record' : 'valid event records'}</span>
               </div>
               <div>
                 <span className="data-count">{filteredEvents.length}</span>
                 <span>matching filters</span>
               </div>
               <div className="sync-time">
-                <span>Fresh sync</span>
+                <span>Last sync</span>
                 <time dateTime={updatedAt?.toISOString()}>
                   {updatedAt?.toLocaleTimeString([], {
                     hour: '2-digit',
@@ -193,7 +191,7 @@ function App() {
                 type="button"
                 onClick={loadEvents}
               >
-                Refresh database
+                Reload database
               </button>
             </section>
 
