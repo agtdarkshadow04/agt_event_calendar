@@ -245,13 +245,32 @@ function App() {
       </main>
 
       <footer className="site-footer">
-        <p>
-          Copyright {new Date().getFullYear()} Alliance of Galactic Travellers.
-          All Rights Reserved.
-        </p>
-        <a href={BUG_REPORT_URL} target="_blank" rel="noopener noreferrer">
-          Report an issue
-        </a>
+        <div className="footer-content">
+          <nav className="footer-links" aria-label="Alliance of Galactic Travellers">
+            <a href="https://www.nms-agt.com" target="_blank" rel="noopener noreferrer">Home</a>
+            <span className="footer-separator" aria-hidden="true">|</span>
+            <a href="https://www.nms-agt.com/about-the-agt" target="_blank" rel="noopener noreferrer">About</a>
+            <span className="footer-separator" aria-hidden="true">|</span>
+            <a href="https://www.nms-agt.com/team" target="_blank" rel="noopener noreferrer">Team</a>
+            <span className="footer-separator" aria-hidden="true">|</span>
+            <a href="https://www.nms-agt.com/contribute" target="_blank" rel="noopener noreferrer">Contribute</a>
+            <span className="footer-separator" aria-hidden="true">|</span>
+            <a href="https://www.nms-agt.com/agt-galactic-archives" target="_blank" rel="noopener noreferrer">Galactic Archives</a>
+            <span className="footer-separator" aria-hidden="true">|</span>
+            <a href="https://www.nms-agt.com/engage" target="_blank" rel="noopener noreferrer">Engage</a>
+            <span className="footer-separator" aria-hidden="true">|</span>
+            <a href="https://www.nms-agt.com/agt-navi" target="_blank" rel="noopener noreferrer">AGT NAVI</a>
+            <span className="footer-separator" aria-hidden="true">|</span>
+            <a href="https://www.nms-agt.com/terms" target="_blank" rel="noopener noreferrer">Terms</a>
+            <span className="footer-separator" aria-hidden="true">|</span>
+            <a href="https://www.nms-agt.com/support" target="_blank" rel="noopener noreferrer">Support</a>
+            <span className="footer-separator" aria-hidden="true">|</span>
+            <a href="https://www.nms-agt.com/terms/copyright" target="_blank" rel="noopener noreferrer">Copyright</a>
+          </nav>
+          <p className="footer-copyright">
+            &copy; {new Date().getFullYear()} Alliance of Galactic Travellers
+          </p>
+        </div>
       </footer>
 
       <EventModal selectedEvent={selectedEvent} onClose={closeSelectedEvent} />

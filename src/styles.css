@@ -807,33 +807,60 @@ summary:focus-visible {
 }
 
 .site-footer {
-  min-height: 5rem;
-  padding: 1.2rem clamp(1rem, 4vw, 3rem);
+  margin-top: auto;
+  color: #000;
+  background: var(--agt-orange);
+}
+
+.footer-content {
+  width: 100%;
+  padding: 3rem clamp(1.5rem, 4vw, 3rem);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  color: #77716b;
-  border-top: 1px solid var(--agt-red);
-  background: rgba(0, 0, 0, 0.65);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.58rem;
-  letter-spacing: 0.07em;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  row-gap: 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
 }
 
-.site-footer p {
+.footer-separator {
+  margin-right: 0.5rem;
+  margin-left: 0.25rem;
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.footer-copyright {
   margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .site-footer a {
-  flex: 0 0 auto;
-  color: var(--agt-orange);
+  color: inherit;
   text-decoration: none;
+  transition: opacity 0.15s ease;
 }
 
 .site-footer a:hover {
-  color: #fff;
+  opacity: 0.6;
+}
+
+.site-footer a:focus-visible {
+  outline-color: #000;
 }
 
 .modal-backdrop {
@@ -1261,12 +1288,6 @@ summary:focus-visible {
 
   .event-chip-name {
     font-size: 0.52rem;
-  }
-
-  .site-footer {
-    align-items: flex-start;
-    flex-direction: column;
-    line-height: 1.6;
   }
 
   .modal-scroll-region,
