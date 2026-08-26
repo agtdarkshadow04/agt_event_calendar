@@ -87,9 +87,12 @@ function App() {
       <header className="site-header">
         <div className="header-content">
           <div className="brand-lockup">
-            <div className="agt-emblem" aria-hidden="true">
-              <span>AGT</span>
-            </div>
+            <img
+              className="agt-emblem"
+              src="/AgtOfficialLogo.webp"
+              alt=""
+              aria-hidden="true"
+            />
             <div>
               <p className="brand-name">Alliance of Galactic Travellers</p>
               <p className="product-name">AGT Event Calendar</p>

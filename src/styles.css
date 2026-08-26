@@ -186,33 +186,11 @@ summary:focus-visible {
 }
 
 .agt-emblem {
-  position: relative;
   width: 2.8rem;
   height: 2.8rem;
   flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: linear-gradient(145deg, var(--agt-red), var(--agt-red-orange));
-  clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+  object-fit: contain;
   filter: drop-shadow(0 0 10px rgba(255, 5, 0, 0.32));
-}
-
-.agt-emblem::after {
-  position: absolute;
-  inset: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  content: '';
-  clip-path: inherit;
-}
-
-.agt-emblem span {
-  position: relative;
-  z-index: 1;
-  font-family: ui-monospace, monospace;
-  font-size: 0.65rem;
-  font-weight: 900;
-  letter-spacing: 0.05em;
 }
 
 .brand-name,
