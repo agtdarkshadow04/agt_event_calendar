@@ -1,0 +1,4 @@
+EVENT_ID,EVENT_NAME,EVENT_DATETIME_START,EVENT_DATETIME_END,EVENT_CIV,EVENT_TYPE,EVENT_MD_URI,EVENT_COVER_IMG_URI,EVENT_LINKS,EVENT_GALAXY_NAME,EVENT_REGION_NAME,EVENT_SYSTEM_NAME,EVENT_PLANET_NAME,EVENT_PORTAL_CODE
+A1B2,"Foundation Summit, 2026",2026-08-30T18:00:00Z,2026-09-01T00:00:00Z,Alliance of Galactic Travellers,Community Summit,,,"https://www.nms-agt.com,https://github.com/Folfchie/agt_event_calendar_md/issues",Euclid,AGT Central Region,New Athena,Travellers Rest,0123ABCD4567
+C3D4,Portal Navigation Workshop,2026-09-12T20:00:00Z,,Hyades Travellers Foundation,Workshop,,,,Hyades,Hyades Core,Ulysses Relay,,89ABCDEF0123
+
