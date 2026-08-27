@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Calendar } from './components/Calendar';
 import { EventModal } from './components/EventModal';
 import { FilterBar } from './components/FilterBar';
+import { BugIcon } from './components/Icons';
 import { BUG_REPORT_URL, EVENT_DATABASE_URL } from './config';
 import { parseEventsCsv } from './lib/csv';
 import { filterEvents } from './lib/filter';
@@ -149,7 +150,7 @@ function App() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              <span aria-hidden="true">◇</span>
+              <BugIcon className="bug-link-icon" />
               Report Bugs
             </a>
           </div>

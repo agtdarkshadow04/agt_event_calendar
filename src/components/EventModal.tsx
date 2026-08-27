@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { ExternalLinkIcon, XIcon } from './Icons';
 import {
   buildGlyphToolUrl,
   markdownUrlTransform,
@@ -200,7 +201,7 @@ export function EventModal({ selectedEvent, onClose }: EventModalProps) {
               onClick={onClose}
               aria-label="Close event details"
             >
-              <span aria-hidden="true">×</span>
+              <XIcon />
             </button>
           </div>
         </header>
@@ -267,7 +268,7 @@ export function EventModal({ selectedEvent, onClose }: EventModalProps) {
                     title="Open with Glyph Tool"
                     aria-label="Open with Glyph Tool"
                   >
-                    <span aria-hidden="true">↗</span>
+                    <ExternalLinkIcon />
                   </a>
                 </dd>
               </div>

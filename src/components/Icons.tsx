@@ -1,0 +1,77 @@
+import type { ReactNode } from 'react';
+
+interface IconProps {
+  children: ReactNode;
+  className?: string;
+}
+
+function Icon({ children, className }: IconProps) {
+  return (
+    <svg
+      className={`icon${className ? ` ${className}` : ''}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {children}
+    </svg>
+  );
+}
+
+export function BugIcon({ className }: Omit<IconProps, 'children'>) {
+  return (
+    <Icon className={className}>
+      <path d="M12 20v-9" />
+      <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z" />
+      <path d="M14.12 3.88 16 2" />
+      <path d="M21 21a4 4 0 0 0-3.81-4" />
+      <path d="M21 5a4 4 0 0 1-3.55 3.97" />
+      <path d="M22 13h-4" />
+      <path d="M3 21a4 4 0 0 1 3.81-4" />
+      <path d="M3 5a4 4 0 0 0 3.55 3.97" />
+      <path d="M6 13H2" />
+      <path d="m8 2 1.88 1.88" />
+      <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13" />
+    </Icon>
+  );
+}
+
+export function ChevronLeftIcon({ className }: Omit<IconProps, 'children'>) {
+  return (
+    <Icon className={className}>
+      <path d="m15 18-6-6 6-6" />
+    </Icon>
+  );
+}
+
+export function ChevronRightIcon({ className }: Omit<IconProps, 'children'>) {
+  return (
+    <Icon className={className}>
+      <path d="m9 18 6-6-6-6" />
+    </Icon>
+  );
+}
+
+export function ExternalLinkIcon({ className }: Omit<IconProps, 'children'>) {
+  return (
+    <Icon className={className}>
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    </Icon>
+  );
+}
+
+export function XIcon({ className }: Omit<IconProps, 'children'>) {
+  return (
+    <Icon className={className}>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </Icon>
+  );
+}

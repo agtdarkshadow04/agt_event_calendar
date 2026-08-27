@@ -270,6 +270,18 @@ summary:focus-visible {
   color: #fff;
 }
 
+.icon {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  display: block;
+}
+
+.bug-link-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
 .main-content {
   width: min(100%, 1600px);
   margin: 0 auto;
@@ -1055,6 +1067,11 @@ summary:focus-visible {
   border-color: var(--agt-red);
 }
 
+.portal-link .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
 .missing,
 .empty-note {
   color: #77716b;
@@ -1228,8 +1245,9 @@ summary:focus-visible {
     font-size: 0;
   }
 
-  .bug-link span {
-    font-size: 1.2rem;
+  .bug-link-icon {
+    width: 1.2rem;
+    height: 1.2rem;
   }
 
   .header-actions {

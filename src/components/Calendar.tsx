@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { ChevronLeftIcon, ChevronRightIcon } from './Icons';
 import {
   eventDayPosition,
   eventOccursOnLocalDay,
@@ -91,7 +92,7 @@ export function Calendar({
             onClick={() => moveMonth(-1)}
             aria-label="Previous month"
           >
-            <span aria-hidden="true">‹</span>
+            <ChevronLeftIcon />
           </button>
           <button
             className="button button-secondary"
@@ -106,7 +107,7 @@ export function Calendar({
             onClick={() => moveMonth(1)}
             aria-label="Next month"
           >
-            <span aria-hidden="true">›</span>
+            <ChevronRightIcon />
           </button>
           <label className="month-picker">
             <span className="sr-only">Go to month</span>
