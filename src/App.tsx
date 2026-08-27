@@ -149,9 +149,10 @@ function App() {
               href={BUG_REPORT_URL}
               target="_blank"
               rel="noopener noreferrer"
+              aria-label="Contact AGT Support"
+              title="Contact AGT Support"
             >
               <BugIcon className="bug-link-icon" />
-              Report Bugs
             </a>
           </div>
         </div>
