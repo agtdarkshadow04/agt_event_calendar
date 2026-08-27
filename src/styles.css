@@ -362,6 +362,7 @@ summary:focus-visible {
   border-radius: 50%;
   font-family: ui-sans-serif, system-ui, sans-serif;
   font-size: 1.45rem;
+  letter-spacing: 0;
   line-height: 1;
 }
 
