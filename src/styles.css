@@ -283,7 +283,7 @@ summary:focus-visible {
 }
 
 .settings-button:hover .settings-button-icon {
-  transform: rotate(180deg);
+  transform: rotate(180deg) scale(1.15);
 }
 
 .settings-button:active .settings-button-icon {
