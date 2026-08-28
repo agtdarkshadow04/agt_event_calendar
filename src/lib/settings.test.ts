@@ -15,7 +15,7 @@ describe('calendar settings', () => {
       fontScale: '1x',
       locale: 'en',
       timeZone: 'Auto',
-      anthem: 'unmute',
+      anthem: 'mute',
     });
   });
 

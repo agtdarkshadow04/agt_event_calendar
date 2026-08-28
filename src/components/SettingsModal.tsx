@@ -225,8 +225,8 @@ export function SettingsModal({
                   update('anthem', event.target.value as AnthemSetting)
                 }
               >
-                <option value="mute">Mute</option>
-                <option value="unmute">Unmute (Default)</option>
+                <option value="mute">Mute (Default)</option>
+                <option value="unmute">Unmute</option>
               </select>
               <small>Playback begins after your first interaction.</small>
             </label>

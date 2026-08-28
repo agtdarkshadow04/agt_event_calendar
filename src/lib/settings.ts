@@ -63,7 +63,7 @@ export function createDefaultSettings(): AppSettings {
     fontScale: '1x',
     locale: 'en',
     timeZone: AUTO_TIME_ZONE,
-    anthem: 'unmute',
+    anthem: 'mute',
   };
 }
 
