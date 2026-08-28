@@ -252,10 +252,10 @@ export function SettingsModal({
             type="button"
             onClick={() => fileInputRef.current?.click()}
           >
-            Import JSON
+            Import
           </button>
           <button className="button button-primary" type="button" onClick={exportSettings}>
-            Export JSON
+            Export
           </button>
         </footer>
       </div>
