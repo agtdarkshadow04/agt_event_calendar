@@ -10,7 +10,7 @@ import { formatAtUtcOffset } from './lib/date';
 import { filterEvents } from './lib/filter';
 import {
   loadSettings,
-  parseUtcOffset,
+  resolveTimeZone,
   saveSettings,
 } from './lib/settings';
 import { withCacheBuster, withEventId } from './lib/urls';
@@ -42,8 +42,8 @@ function App() {
   const [settings, setSettings] = useState(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const timeZoneOffset = useMemo(
-    () => parseUtcOffset(settings.timeZone),
+  const { label: timeZone, offsetMinutes: timeZoneOffset } = useMemo(
+    () => resolveTimeZone(settings.timeZone),
     [settings.timeZone],
   );
 
@@ -348,7 +348,7 @@ function App() {
                 events={filteredEvents}
                 viewDate={viewDate}
                 locale={settings.locale}
-                timeZone={settings.timeZone}
+                timeZone={timeZone}
                 timeZoneOffset={timeZoneOffset}
                 onViewDateChange={setViewDate}
                 onSelectEvent={selectEvent}
@@ -405,7 +405,7 @@ function App() {
       <EventModal
         selectedEvent={selectedEvent}
         locale={settings.locale}
-        timeZone={settings.timeZone}
+        timeZone={timeZone}
         timeZoneOffset={timeZoneOffset}
         onClose={closeSelectedEvent}
       />
@@ -414,3 +414,4 @@ function App() {
 }
 
 export default App;
+

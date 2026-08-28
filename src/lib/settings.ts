@@ -31,6 +31,7 @@ export interface AppSettings {
 }
 
 export const SETTINGS_STORAGE_KEY = 'agt_event_calendar_settings';
+export const AUTO_TIME_ZONE = 'Auto';
 
 export function formatUtcOffset(offsetMinutes: number): string {
   const sign = offsetMinutes < 0 ? '-' : '+';
@@ -40,11 +41,14 @@ export function formatUtcOffset(offsetMinutes: number): string {
   return `UTC${sign}${hours}:${minutes}`;
 }
 
-export const TIME_ZONE_OPTIONS = UTC_OFFSETS.map((offsetMinutes) => ({
-  value: formatUtcOffset(offsetMinutes),
-  label: formatUtcOffset(offsetMinutes),
-  offsetMinutes,
-}));
+export const TIME_ZONE_OPTIONS = [
+  { value: AUTO_TIME_ZONE, label: AUTO_TIME_ZONE, offsetMinutes: null },
+  ...UTC_OFFSETS.map((offsetMinutes) => ({
+    value: formatUtcOffset(offsetMinutes),
+    label: formatUtcOffset(offsetMinutes),
+    offsetMinutes,
+  })),
+];
 
 const FONT_SCALE_SET = new Set<string>(FONT_SCALES);
 const LOCALE_SET = new Set<string>(LOCALES.map((locale) => locale.value));
@@ -54,14 +58,28 @@ export function browserTimeZone(now = new Date()): string {
   return formatUtcOffset(-now.getTimezoneOffset());
 }
 
-export function createDefaultSettings(now = new Date()): AppSettings {
-  const detectedTimeZone = browserTimeZone(now);
+export function createDefaultSettings(): AppSettings {
   return {
     fontScale: '1x',
     locale: 'en',
-    timeZone: TIME_ZONE_SET.has(detectedTimeZone) ? detectedTimeZone : 'UTC+01:00',
+    timeZone: AUTO_TIME_ZONE,
     anthem: 'unmute',
   };
+}
+
+export function resolveTimeZone(
+  timeZone: string,
+  now = new Date(),
+): { label: string; offsetMinutes: number } {
+  if (timeZone === AUTO_TIME_ZONE) {
+    const browserOffset = now.getTimezoneOffset();
+    return {
+      label: browserTimeZone(now),
+      offsetMinutes: browserOffset === 0 ? 0 : -browserOffset,
+    };
+  }
+
+  return { label: timeZone, offsetMinutes: parseUtcOffset(timeZone) };
 }
 
 export function parseUtcOffset(timeZone: string): number {
@@ -119,3 +137,4 @@ export function loadSettings(): AppSettings {
 export function saveSettings(settings: AppSettings): void {
   window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
 }
+

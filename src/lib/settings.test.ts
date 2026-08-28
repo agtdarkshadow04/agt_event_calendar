@@ -1,26 +1,43 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  browserTimeZone,
   createDefaultSettings,
   parseSettingsJson,
   parseUtcOffset,
+  resolveTimeZone,
   TIME_ZONE_OPTIONS,
 } from './settings';
 
 describe('calendar settings', () => {
-  it('uses the browser offset and requested defaults', () => {
-    const now = new Date('2026-08-28T12:00:00-05:00');
-    now.getTimezoneOffset = () => 300;
-
-    assert.deepEqual(createDefaultSettings(now), {
+  it('uses Auto and the requested defaults', () => {
+    assert.deepEqual(createDefaultSettings(), {
       fontScale: '1x',
       locale: 'en',
-      timeZone: 'UTC-05:00',
+      timeZone: 'Auto',
       anthem: 'unmute',
     });
   });
 
-  it('excludes UTC while retaining fractional major offsets', () => {
+  it('resolves Auto to the browser offset', () => {
+    const now = new Date('2026-08-28T17:00:00Z');
+    now.getTimezoneOffset = () => 300;
+
+    assert.equal(browserTimeZone(now), 'UTC-05:00');
+    assert.deepEqual(resolveTimeZone('Auto', now), {
+      label: 'UTC-05:00',
+      offsetMinutes: -300,
+    });
+
+    now.getTimezoneOffset = () => 0;
+    assert.deepEqual(resolveTimeZone('Auto', now), {
+      label: 'UTC+00:00',
+      offsetMinutes: 0,
+    });
+  });
+
+  it('includes Auto, excludes manual UTC, and retains fractional major offsets', () => {
+    assert.equal(TIME_ZONE_OPTIONS[0].value, 'Auto');
     assert.equal(TIME_ZONE_OPTIONS.some(({ value }) => value === 'UTC+00:00'), false);
     assert.equal(TIME_ZONE_OPTIONS.some(({ value }) => value === 'UTC+05:45'), true);
     assert.equal(parseUtcOffset('UTC-03:30'), -210);
@@ -30,7 +47,7 @@ describe('calendar settings', () => {
     const settings = {
       fontScale: '1.5x',
       locale: 'ja',
-      timeZone: 'UTC+09:00',
+      timeZone: 'Auto',
       anthem: 'mute',
     } as const;
 
@@ -45,3 +62,4 @@ describe('calendar settings', () => {
     assert.throws(() => parseSettingsJson('[]'), /must contain an object/);
   });
 });
+
