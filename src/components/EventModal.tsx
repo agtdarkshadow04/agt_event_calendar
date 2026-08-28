@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ExternalLinkIcon, XIcon } from './Icons';
+import { formatAtUtcOffset } from '../lib/date';
 import {
   buildGlyphToolUrl,
   markdownUrlTransform,
@@ -12,13 +13,11 @@ import type { CalendarEvent } from '../types';
 
 interface EventModalProps {
   selectedEvent: CalendarEvent | null;
+  locale: string;
+  timeZone: string;
+  timeZoneOffset: number;
   onClose: () => void;
 }
-
-const localFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'full',
-  timeStyle: 'long',
-});
 
 function DetailField({
   label,
@@ -41,15 +40,17 @@ function DetailField({
   );
 }
 
-function formatLocal(date: Date): string {
-  return localFormatter.format(date);
-}
-
 function formatUtc(date: Date): string {
   return `${date.toISOString().replace('T', ' ').replace('.000Z', 'Z')} (UTC)`;
 }
 
-export function EventModal({ selectedEvent, onClose }: EventModalProps) {
+export function EventModal({
+  selectedEvent,
+  locale,
+  timeZone,
+  timeZoneOffset,
+  onClose,
+}: EventModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [description, setDescription] = useState('');
@@ -137,6 +138,11 @@ export function EventModal({ selectedEvent, onClose }: EventModalProps) {
   if (!selectedEvent) return null;
 
   const event = selectedEvent;
+  const formatLocal = (date: Date) =>
+    `${formatAtUtcOffset(date, locale, timeZoneOffset, {
+      dateStyle: 'full',
+      timeStyle: 'medium',
+    })} (${timeZone})`;
   const glyphToolUrl = buildGlyphToolUrl(event.galaxy, event.portalCode);
   const shareEvent = async () => {
     setShareState('copying');

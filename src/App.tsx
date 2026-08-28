@@ -1,11 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar } from './components/Calendar';
 import { EventModal } from './components/EventModal';
 import { FilterBar } from './components/FilterBar';
-import { BugIcon } from './components/Icons';
+import { BugIcon, SettingsIcon } from './components/Icons';
+import { SettingsModal } from './components/SettingsModal';
 import { BUG_REPORT_URL, EVENT_DATABASE_URL } from './config';
 import { parseEventsCsv } from './lib/csv';
+import { formatAtUtcOffset } from './lib/date';
 import { filterEvents } from './lib/filter';
+import {
+  loadSettings,
+  parseUtcOffset,
+  saveSettings,
+} from './lib/settings';
 import { withCacheBuster, withEventId } from './lib/urls';
 import type {
   CalendarEvent,
@@ -32,6 +39,13 @@ function App() {
   const [filters, setFilters] = useState<EventFilters>(INITIAL_FILTERS);
   const [viewDate, setViewDate] = useState(() => new Date());
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [settings, setSettings] = useState(loadSettings);
+  const [showSettings, setShowSettings] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const timeZoneOffset = useMemo(
+    () => parseUtcOffset(settings.timeZone),
+    [settings.timeZone],
+  );
 
   const loadEvents = useCallback(async () => {
     setLoadState('loading');
@@ -68,6 +82,53 @@ function App() {
   }, [loadEvents]);
 
   useEffect(() => {
+    try {
+      saveSettings(settings);
+    } catch (error: unknown) {
+      console.error('Unable to cache calendar settings', error);
+    }
+  }, [settings]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const previousFontSize = root.style.fontSize;
+    const previousLanguage = root.lang;
+    root.style.fontSize = `${Number.parseFloat(settings.fontScale) * 100}%`;
+    root.lang = settings.locale;
+    return () => {
+      root.style.fontSize = previousFontSize;
+      root.lang = previousLanguage;
+    };
+  }, [settings.fontScale, settings.locale]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = 0.4;
+    audio.muted = settings.anthem === 'mute';
+    if (settings.anthem === 'mute') audio.pause();
+  }, [settings.anthem]);
+
+  useEffect(() => {
+    const playAfterInteraction = () => {
+      if (settings.anthem === 'unmute' && audioRef.current) {
+        void audioRef.current.play().catch(() => {
+          // Browsers may still deny media playback for non-qualifying interactions.
+        });
+      }
+      removeInteractionListeners();
+    };
+    const removeInteractionListeners = () => {
+      window.removeEventListener('pointerdown', playAfterInteraction);
+      window.removeEventListener('keydown', playAfterInteraction);
+    };
+
+    window.addEventListener('pointerdown', playAfterInteraction);
+    window.addEventListener('keydown', playAfterInteraction);
+    return removeInteractionListeners;
+  }, [settings.anthem]);
+
+  useEffect(() => {
     const selectEventFromUrl = () => {
       const eventId = new URL(window.location.href).searchParams.get('event_id');
       setSelectedEvent(
@@ -81,8 +142,8 @@ function App() {
   }, [events]);
 
   const filteredEvents = useMemo(
-    () => filterEvents(events, filters),
-    [events, filters],
+    () => filterEvents(events, filters, new Date(), timeZoneOffset),
+    [events, filters, timeZoneOffset],
   );
   const skippedRows = warnings.filter((warning) =>
     warning.messages.some((message) =>
@@ -107,6 +168,8 @@ function App() {
       withEventId(window.location.href, null),
     );
   }, []);
+
+  const closeSettings = useCallback(() => setShowSettings(false), []);
 
   return (
     <div className="app-shell">
@@ -144,6 +207,18 @@ function App() {
                     : 'Database live'}
               </span>
             </div>
+            <button
+              className="settings-button"
+              type="button"
+              onClick={() => setShowSettings(true)}
+              aria-label="Open settings"
+              aria-haspopup="dialog"
+              aria-expanded={showSettings}
+              aria-controls="settings-dialog"
+              title="Settings"
+            >
+              <SettingsIcon className="settings-button-icon" />
+            </button>
             <a
               className="bug-link"
               href={BUG_REPORT_URL}
@@ -211,10 +286,14 @@ function App() {
               <div className="sync-time">
                 <span>Last sync</span>
                 <time dateTime={updatedAt?.toISOString()}>
-                  {updatedAt?.toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {updatedAt
+                    ? formatAtUtcOffset(
+                        updatedAt,
+                        settings.locale,
+                        timeZoneOffset,
+                        { hour: '2-digit', minute: '2-digit' },
+                      )
+                    : ''}
                 </time>
               </div>
               <button
@@ -268,6 +347,9 @@ function App() {
               <Calendar
                 events={filteredEvents}
                 viewDate={viewDate}
+                locale={settings.locale}
+                timeZone={settings.timeZone}
+                timeZoneOffset={timeZoneOffset}
                 onViewDateChange={setViewDate}
                 onSelectEvent={selectEvent}
               />
@@ -305,7 +387,28 @@ function App() {
         </div>
       </footer>
 
-      <EventModal selectedEvent={selectedEvent} onClose={closeSelectedEvent} />
+      <audio
+        ref={audioRef}
+        src="/agt-anthem-instrumental.mp3"
+        loop
+        preload="auto"
+      />
+
+      {showSettings && (
+        <SettingsModal
+          settings={settings}
+          onChange={setSettings}
+          onClose={closeSettings}
+        />
+      )}
+
+      <EventModal
+        selectedEvent={selectedEvent}
+        locale={settings.locale}
+        timeZone={settings.timeZone}
+        timeZoneOffset={timeZoneOffset}
+        onClose={closeSelectedEvent}
+      />
     </div>
   );
 }

@@ -79,4 +79,16 @@ describe('filterEvents', () => {
 
     assert.deepEqual(result.map((event) => event.id), ['C3D4']);
   });
+
+  it('uses the selected UTC offset for local-day filters', () => {
+    const boundaryEvent = {
+      ...events[0],
+      start: new Date('2026-09-20T01:00:00Z'),
+    };
+    const now = new Date('2026-09-20T12:00:00Z');
+    const upcoming = { ...baseFilters, dateContext: 'upcoming' } as const;
+
+    assert.equal(filterEvents([boundaryEvent], upcoming, now, -300).length, 0);
+    assert.equal(filterEvents([boundaryEvent], upcoming, now, 60).length, 1);
+  });
 });

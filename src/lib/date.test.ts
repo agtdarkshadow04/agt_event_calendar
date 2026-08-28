@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   effectiveEventEnd,
+  dateAtUtcOffset,
   eventDayPosition,
   eventOccursOnLocalDay,
+  formatAtUtcOffset,
   getMonthGrid,
 } from './date';
 import type { CalendarEvent } from '../types';
@@ -29,7 +31,10 @@ function event(start: string, end: string | null): CalendarEvent {
 
 describe('calendar date handling', () => {
   it('shows an event on every local day it spans', () => {
-    const item = event('2026-09-10T10:00:00Z', '2026-09-12T18:00:00Z');
+    const item = event(
+      new Date(2026, 8, 10, 10).toISOString(),
+      new Date(2026, 8, 12, 18).toISOString(),
+    );
 
     assert.equal(eventOccursOnLocalDay(item, new Date('2026-09-10T12:00:00')), true);
     assert.equal(eventOccursOnLocalDay(item, new Date('2026-09-11T12:00:00')), true);
@@ -60,5 +65,33 @@ describe('calendar date handling', () => {
     assert.equal(days.at(-1)?.getDay(), 6);
     assert.equal(days.length % 7, 0);
     assert.equal(days.some((day) => day.getMonth() === 7 && day.getDate() === 31), true);
+  });
+
+  it('places and formats events in an explicitly selected UTC offset', () => {
+    const item = event('2026-09-10T01:30:00Z', null);
+    const previousDay = new Date(2026, 8, 9);
+    const utcMinusFive = -300;
+
+    assert.equal(eventOccursOnLocalDay(item, previousDay, utcMinusFive), true);
+    assert.equal(eventOccursOnLocalDay(item, new Date(2026, 8, 10), utcMinusFive), false);
+    assert.equal(dateAtUtcOffset(item.start, utcMinusFive).getDate(), 9);
+    assert.equal(
+      formatAtUtcOffset(item.start, 'en', utcMinusFive, {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: false,
+      }),
+      '20:30',
+    );
+  });
+
+  it('treats midnight in the selected UTC offset as exclusive', () => {
+    const utcPlusFiveThirty = 330;
+    const item = event('2026-09-10T12:00:00Z', '2026-09-11T18:30:00Z');
+
+    assert.equal(
+      eventOccursOnLocalDay(item, new Date(2026, 8, 12), utcPlusFiveThirty),
+      false,
+    );
   });
 });

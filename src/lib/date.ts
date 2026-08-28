@@ -1,22 +1,53 @@
 import type { CalendarEvent } from '../types';
 
-export function startOfLocalDay(date: Date): Date {
+const MILLISECONDS_PER_MINUTE = 60_000;
+const MILLISECONDS_PER_DAY = 86_400_000;
+
+function offsetDate(date: Date, offsetMinutes: number): Date {
+  return new Date(date.getTime() + offsetMinutes * MILLISECONDS_PER_MINUTE);
+}
+
+function offsetDayValue(date: Date, offsetMinutes: number): number {
+  const shifted = offsetDate(date, offsetMinutes);
+  return Date.UTC(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth(),
+    shifted.getUTCDate(),
+  );
+}
+
+function calendarDayValue(date: Date): number {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+export function startOfLocalDay(date: Date, offsetMinutes?: number): Date {
+  if (offsetMinutes !== undefined) {
+    return new Date(offsetDayValue(date, offsetMinutes) - offsetMinutes * MILLISECONDS_PER_MINUTE);
+  }
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-export function endOfLocalDay(date: Date): Date {
+export function endOfLocalDay(date: Date, offsetMinutes?: number): Date {
+  if (offsetMinutes !== undefined) {
+    return new Date(startOfLocalDay(date, offsetMinutes).getTime() + MILLISECONDS_PER_DAY - 1);
+  }
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
 }
 
-export function effectiveEventEnd(event: CalendarEvent): Date {
+export function effectiveEventEnd(event: CalendarEvent, offsetMinutes?: number): Date {
   if (!event.end) return event.start;
 
   const end = event.end;
-  const isExactLocalMidnight =
-    end.getHours() === 0 &&
-    end.getMinutes() === 0 &&
-    end.getSeconds() === 0 &&
-    end.getMilliseconds() === 0;
+  const shiftedEnd = offsetMinutes === undefined ? end : offsetDate(end, offsetMinutes);
+  const isExactLocalMidnight = offsetMinutes === undefined
+    ? shiftedEnd.getHours() === 0 &&
+      shiftedEnd.getMinutes() === 0 &&
+      shiftedEnd.getSeconds() === 0 &&
+      shiftedEnd.getMilliseconds() === 0
+    : shiftedEnd.getUTCHours() === 0 &&
+      shiftedEnd.getUTCMinutes() === 0 &&
+      shiftedEnd.getUTCSeconds() === 0 &&
+      shiftedEnd.getUTCMilliseconds() === 0;
 
   if (isExactLocalMidnight && end.getTime() > event.start.getTime()) {
     return new Date(end.getTime() - 1);
@@ -28,27 +59,60 @@ export function effectiveEventEnd(event: CalendarEvent): Date {
 export function eventOccursOnLocalDay(
   event: CalendarEvent,
   day: Date,
+  offsetMinutes?: number,
 ): boolean {
-  const dayStart = startOfLocalDay(day).getTime();
-  const dayEnd = endOfLocalDay(day).getTime();
+  const dayStart = offsetMinutes === undefined
+    ? startOfLocalDay(day).getTime()
+    : calendarDayValue(day) - offsetMinutes * MILLISECONDS_PER_MINUTE;
+  const dayEnd = offsetMinutes === undefined
+    ? endOfLocalDay(day).getTime()
+    : dayStart + MILLISECONDS_PER_DAY - 1;
   return (
     event.start.getTime() <= dayEnd &&
-    effectiveEventEnd(event).getTime() >= dayStart
+    effectiveEventEnd(event, offsetMinutes).getTime() >= dayStart
   );
 }
 
 export function eventDayPosition(
   event: CalendarEvent,
   day: Date,
+  offsetMinutes?: number,
 ): 'single' | 'start' | 'middle' | 'end' {
-  const startDay = startOfLocalDay(event.start).getTime();
-  const endDay = startOfLocalDay(effectiveEventEnd(event)).getTime();
-  const current = startOfLocalDay(day).getTime();
+  const startDay = offsetMinutes === undefined
+    ? startOfLocalDay(event.start).getTime()
+    : offsetDayValue(event.start, offsetMinutes);
+  const end = effectiveEventEnd(event, offsetMinutes);
+  const endDay = offsetMinutes === undefined
+    ? startOfLocalDay(end).getTime()
+    : offsetDayValue(end, offsetMinutes);
+  const current = offsetMinutes === undefined
+    ? startOfLocalDay(day).getTime()
+    : calendarDayValue(day);
 
   if (startDay === endDay) return 'single';
   if (current === startDay) return 'start';
   if (current === endDay) return 'end';
   return 'middle';
+}
+
+export function dateAtUtcOffset(date: Date, offsetMinutes: number): Date {
+  const shifted = offsetDate(date, offsetMinutes);
+  return new Date(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth(),
+    shifted.getUTCDate(),
+  );
+}
+
+export function formatAtUtcOffset(
+  date: Date,
+  locale: string,
+  offsetMinutes: number,
+  options: Intl.DateTimeFormatOptions,
+): string {
+  return new Intl.DateTimeFormat(locale, { ...options, timeZone: 'UTC' }).format(
+    offsetDate(date, offsetMinutes),
+  );
 }
 
 export function getMonthGrid(viewDate: Date): Date[] {

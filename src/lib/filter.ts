@@ -9,12 +9,15 @@ export function filterEvents(
   events: CalendarEvent[],
   filters: EventFilters,
   now = new Date(),
+  offsetMinutes?: number,
 ): CalendarEvent[] {
   const query = filters.search.trim().toLocaleLowerCase();
-  const today = startOfLocalDay(now).getTime();
-  const next30 = endOfLocalDay(
-    new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30),
-  ).getTime();
+  const today = startOfLocalDay(now, offsetMinutes).getTime();
+  const next30 = offsetMinutes === undefined
+    ? endOfLocalDay(
+        new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30),
+      ).getTime()
+    : today + 31 * 24 * 60 * 60 * 1000 - 1;
 
   return events.filter((event) => {
     if (filters.type && event.type !== filters.type) return false;
@@ -43,7 +46,7 @@ export function filterEvents(
       return false;
     }
 
-    const eventEnd = effectiveEventEnd(event).getTime();
+    const eventEnd = effectiveEventEnd(event, offsetMinutes).getTime();
     if (filters.dateContext === 'upcoming' && eventEnd < today) return false;
     if (
       filters.dateContext === 'next30' &&

@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from './Icons';
 import {
+  dateAtUtcOffset,
   eventDayPosition,
   eventOccursOnLocalDay,
+  formatAtUtcOffset,
   formatMonthInput,
   getMonthGrid,
   isSameLocalDay,
@@ -13,36 +15,12 @@ import type { CalendarEvent } from '../types';
 interface CalendarProps {
   events: CalendarEvent[];
   viewDate: Date;
+  locale: string;
+  timeZone: string;
+  timeZoneOffset: number;
   onViewDateChange: (date: Date) => void;
   onSelectEvent: (event: CalendarEvent) => void;
 }
-
-const WEEKDAYS = [
-  ['Sunday', 'Sun'],
-  ['Monday', 'Mon'],
-  ['Tuesday', 'Tue'],
-  ['Wednesday', 'Wed'],
-  ['Thursday', 'Thu'],
-  ['Friday', 'Fri'],
-  ['Saturday', 'Sat'],
-];
-
-const monthFormatter = new Intl.DateTimeFormat(undefined, {
-  month: 'long',
-  year: 'numeric',
-});
-
-const dayLabelFormatter = new Intl.DateTimeFormat(undefined, {
-  weekday: 'long',
-  month: 'long',
-  day: 'numeric',
-  year: 'numeric',
-});
-
-const timeFormatter = new Intl.DateTimeFormat(undefined, {
-  hour: 'numeric',
-  minute: '2-digit',
-});
 
 function localDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
@@ -60,14 +38,44 @@ function positionLabel(position: ReturnType<typeof eventDayPosition>): string {
 export function Calendar({
   events,
   viewDate,
+  locale,
+  timeZone,
+  timeZoneOffset,
   onViewDateChange,
   onSelectEvent,
 }: CalendarProps) {
-  const today = new Date();
+  const today = dateAtUtcOffset(new Date(), timeZoneOffset);
   const days = useMemo(() => getMonthGrid(viewDate), [viewDate]);
-  const visibleMonthEvents = events.filter((event) =>
-    days.some((day) => eventOccursOnLocalDay(event, day)),
+  const monthFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }),
+    [locale],
   );
+  const dayLabelFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+    [locale],
+  );
+  const weekdays = useMemo(() => {
+    const longFormatter = new Intl.DateTimeFormat(locale, { weekday: 'long' });
+    const shortFormatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
+    return Array.from({ length: 7 }, (_, index) => {
+      const day = new Date(2024, 0, 7 + index);
+      return [longFormatter.format(day), shortFormatter.format(day)];
+    });
+  }, [locale]);
+  const visibleMonthEvents = events.filter((event) =>
+    days.some((day) => eventOccursOnLocalDay(event, day, timeZoneOffset)),
+  );
+  const formatTime = (date: Date) =>
+    formatAtUtcOffset(date, locale, timeZoneOffset, {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
 
   const moveMonth = (delta: number) => {
     onViewDateChange(
@@ -79,7 +87,7 @@ export function Calendar({
     <section className="calendar-shell" aria-labelledby="calendar-heading">
       <div className="calendar-toolbar">
         <div>
-          <p className="eyebrow">Viewer local time</p>
+          <p className="eyebrow">Viewer local time · {timeZone}</p>
           <h2 id="calendar-heading" aria-live="polite">
             {monthFormatter.format(viewDate)}
           </h2>
@@ -132,7 +140,7 @@ export function Calendar({
       </p>
 
       <div className="calendar-grid" role="grid" aria-label="Event calendar">
-        {WEEKDAYS.map(([full, short]) => (
+        {weekdays.map(([full, short]) => (
           <div className="weekday" role="columnheader" key={full}>
             <span className="weekday-full">{full}</span>
             <span className="weekday-short" aria-hidden="true">
@@ -143,7 +151,7 @@ export function Calendar({
 
         {days.map((day) => {
           const dayEvents = events.filter((event) =>
-            eventOccursOnLocalDay(event, day),
+            eventOccursOnLocalDay(event, day, timeZoneOffset),
           );
           const outsideMonth = day.getMonth() !== viewDate.getMonth();
           const isToday = isSameLocalDay(day, today);
@@ -166,7 +174,7 @@ export function Calendar({
 
               <div className="day-events">
                 {dayEvents.map((event) => {
-                  const position = eventDayPosition(event, day);
+                  const position = eventDayPosition(event, day, timeZoneOffset);
                   const context = positionLabel(position);
                   const showTime = position === 'single' || position === 'start';
 
@@ -178,11 +186,11 @@ export function Calendar({
                       key={`${event.id}-${localDateKey(day)}`}
                       onClick={() => onSelectEvent(event)}
                       aria-label={`${event.name}. ${context || 'Event'}${
-                        showTime ? ` at ${timeFormatter.format(event.start)}` : ''
+                        showTime ? ` at ${formatTime(event.start)}` : ''
                       }. Open details.`}
                     >
                       <span className="event-chip-time">
-                        {context || timeFormatter.format(event.start)}
+                        {context || formatTime(event.start)}
                       </span>
                       <span className="event-chip-name">{event.name}</span>
                     </button>
