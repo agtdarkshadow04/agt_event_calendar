@@ -4,6 +4,8 @@ import type {
   DataWarning,
   ParseEventsResult,
 } from '../types';
+import { formatTranslation, getTranslations } from '../translations';
+import type { Locale, Translations } from '../translations';
 
 export const EVENT_FIELDS = [
   'EVENT_ID',
@@ -74,57 +76,56 @@ function normalizeRecord(record: Record<string, unknown>): CsvRecord {
 function parseRow(
   rawRecord: Record<string, unknown>,
   row: number,
+  translations: Translations,
 ): { event: CalendarEvent | null; warning: DataWarning | null } {
   const record = normalizeRecord(rawRecord);
   const fatal: string[] = [];
   const notices: string[] = [];
 
   for (const field of REQUIRED_FIELDS) {
-    if (!record[field]) fatal.push(`${field} is required`);
+    if (!record[field]) {
+      fatal.push(formatTranslation(translations.fieldRequired, { field }));
+    }
   }
 
   if (record.EVENT_ID && !/^[0-9a-f]{4}$/i.test(record.EVENT_ID)) {
-    fatal.push('EVENT_ID must contain exactly four hexadecimal characters');
+    fatal.push(translations.eventIdHex);
   }
 
   if (
     record.EVENT_PORTAL_CODE &&
     !/^[0-9a-z]{12}$/i.test(record.EVENT_PORTAL_CODE)
   ) {
-    fatal.push(
-      'EVENT_PORTAL_CODE must contain exactly 12 alphanumeric characters',
-    );
+    fatal.push(translations.portalCodeLength);
   }
 
   const start = validUtcDate(record.EVENT_DATETIME_START);
   if (record.EVENT_DATETIME_START && !start) {
-    fatal.push('EVENT_DATETIME_START must be a valid UTC ISO 8601 timestamp');
+    fatal.push(translations.startUtcTimestamp);
   }
 
   const end = record.EVENT_DATETIME_END
     ? validUtcDate(record.EVENT_DATETIME_END)
     : null;
   if (record.EVENT_DATETIME_END && !end) {
-    fatal.push('EVENT_DATETIME_END must be a valid UTC ISO 8601 timestamp');
+    fatal.push(translations.endUtcTimestamp);
   }
   if (start && end && end.getTime() < start.getTime()) {
-    fatal.push('EVENT_DATETIME_END cannot be before EVENT_DATETIME_START');
+    fatal.push(translations.endBeforeStart);
   }
 
   const descriptionUrl = record.EVENT_MD_URI
     ? safeHttpUrl(record.EVENT_MD_URI)
     : null;
   if (record.EVENT_MD_URI && !descriptionUrl) {
-    notices.push('EVENT_MD_URI was ignored because it is not a safe HTTP(S) URL');
+    notices.push(translations.unsafeDescriptionUrl);
   }
 
   const coverImageUrl = record.EVENT_COVER_IMG_URI
     ? safeHttpUrl(record.EVENT_COVER_IMG_URI)
     : null;
   if (record.EVENT_COVER_IMG_URI && !coverImageUrl) {
-    notices.push(
-      'EVENT_COVER_IMG_URI was ignored because it is not a safe HTTP(S) URL',
-    );
+    notices.push(translations.unsafeCoverUrl);
   }
 
   const links = record.EVENT_LINKS
@@ -134,7 +135,9 @@ function parseRow(
         .flatMap((value) => {
           const safe = safeHttpUrl(value);
           if (!safe) {
-            notices.push(`Related link was ignored because it is invalid: ${value}`);
+            notices.push(
+              formatTranslation(translations.invalidRelatedLink, { value }),
+            );
             return [];
           }
           return [safe];
@@ -144,7 +147,7 @@ function parseRow(
   if (fatal.length > 0 || !start) {
     return {
       event: null,
-      warning: { row, messages: [...fatal, ...notices] },
+      warning: { row, messages: [...fatal, ...notices], skipped: true },
     };
   }
 
@@ -165,11 +168,17 @@ function parseRow(
       planet: optional(record.EVENT_PLANET_NAME),
       portalCode: record.EVENT_PORTAL_CODE.toUpperCase(),
     },
-    warning: notices.length > 0 ? { row, messages: notices } : null,
+    warning: notices.length > 0
+      ? { row, messages: notices, skipped: false }
+      : null,
   };
 }
 
-export function parseEventsCsv(csv: string): ParseEventsResult {
+export function parseEventsCsv(
+  csv: string,
+  locale: Locale = 'en',
+): ParseEventsResult {
+  const translations = getTranslations(locale);
   const parsed = Papa.parse<Record<string, unknown>>(csv, {
     header: true,
     skipEmptyLines: 'greedy',
@@ -180,7 +189,10 @@ export function parseEventsCsv(csv: string): ParseEventsResult {
   const eventIds = new Set<string>();
   const warnings: DataWarning[] = parsed.errors.map((error) => ({
     row: (error.row ?? 0) + 2,
-    messages: [`CSV parser: ${error.message}`],
+    messages: [
+      formatTranslation(translations.csvParser, { message: error.message }),
+    ],
+    skipped: false,
   }));
 
   const presentFields = new Set(parsed.meta.fields ?? []);
@@ -190,17 +202,27 @@ export function parseEventsCsv(csv: string): ParseEventsResult {
   if (missingHeaders.length > 0) {
     warnings.unshift({
       row: 1,
-      messages: [`Missing required CSV headers: ${missingHeaders.join(', ')}`],
+      messages: [
+        formatTranslation(translations.missingHeaders, {
+          headers: missingHeaders.join(', '),
+        }),
+      ],
+      skipped: false,
     });
   }
 
   parsed.data.forEach((record, index) => {
-    const result = parseRow(record, index + 2);
+    const result = parseRow(record, index + 2, translations);
     if (result.event) {
       if (eventIds.has(result.event.id)) {
         warnings.push({
           row: index + 2,
-          messages: [`Duplicate EVENT_ID ${result.event.id}; row was skipped`],
+          messages: [
+            formatTranslation(translations.duplicateEventId, {
+              id: result.event.id,
+            }),
+          ],
+          skipped: true,
         });
       } else {
         eventIds.add(result.event.id);

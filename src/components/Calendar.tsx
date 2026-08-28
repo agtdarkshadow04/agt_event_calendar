@@ -11,6 +11,7 @@ import {
   parseMonthInput,
 } from '../lib/date';
 import type { CalendarEvent } from '../types';
+import { formatTranslation, getTranslations } from '../translations';
 
 interface CalendarProps {
   events: CalendarEvent[];
@@ -28,10 +29,13 @@ function localDateKey(date: Date): string {
   ).padStart(2, '0')}`;
 }
 
-function positionLabel(position: ReturnType<typeof eventDayPosition>): string {
-  if (position === 'start') return 'Starts';
-  if (position === 'middle') return 'Continues';
-  if (position === 'end') return 'Ends';
+function positionLabel(
+  position: ReturnType<typeof eventDayPosition>,
+  translations: ReturnType<typeof getTranslations>,
+): string {
+  if (position === 'start') return translations.starts;
+  if (position === 'middle') return translations.continues;
+  if (position === 'end') return translations.ends;
   return '';
 }
 
@@ -44,6 +48,7 @@ export function Calendar({
   onViewDateChange,
   onSelectEvent,
 }: CalendarProps) {
+  const translations = getTranslations(locale);
   const today = dateAtUtcOffset(new Date(), timeZoneOffset);
   const days = useMemo(() => getMonthGrid(viewDate), [viewDate]);
   const monthFormatter = useMemo(
@@ -87,18 +92,20 @@ export function Calendar({
     <section className="calendar-shell" aria-labelledby="calendar-heading">
       <div className="calendar-toolbar">
         <div>
-          <p className="eyebrow">Viewer local time · {timeZone}</p>
+          <p className="eyebrow">
+            {formatTranslation(translations.viewerLocalTime, { timeZone })}
+          </p>
           <h2 id="calendar-heading" aria-live="polite">
             {monthFormatter.format(viewDate)}
           </h2>
         </div>
 
-        <div className="calendar-actions" aria-label="Calendar navigation">
+        <div className="calendar-actions" aria-label={translations.calendarNavigation}>
           <button
             className="button button-icon"
             type="button"
             onClick={() => moveMonth(-1)}
-            aria-label="Previous month"
+            aria-label={translations.previousMonth}
           >
             <ChevronLeftIcon />
           </button>
@@ -107,18 +114,18 @@ export function Calendar({
             type="button"
             onClick={() => onViewDateChange(new Date())}
           >
-            Today
+            {translations.today}
           </button>
           <button
             className="button button-icon"
             type="button"
             onClick={() => moveMonth(1)}
-            aria-label="Next month"
+            aria-label={translations.nextMonth}
           >
             <ChevronRightIcon />
           </button>
           <label className="month-picker">
-            <span className="sr-only">Go to month</span>
+            <span className="sr-only">{translations.goToMonth}</span>
             <input
               type="month"
               value={formatMonthInput(viewDate)}
@@ -133,13 +140,16 @@ export function Calendar({
 
       <p className="calendar-summary" aria-live="polite">
         {visibleMonthEvents.length === 0
-          ? 'No matching events intersect this calendar view.'
-          : `${visibleMonthEvents.length} matching ${
-              visibleMonthEvents.length === 1 ? 'event' : 'events'
-            } intersect this calendar view.`}
+          ? translations.noMatchingEvents
+          : formatTranslation(
+              visibleMonthEvents.length === 1
+                ? translations.matchingEventSummary
+                : translations.matchingEventsSummary,
+              { count: visibleMonthEvents.length },
+            )}
       </p>
 
-      <div className="calendar-grid" role="grid" aria-label="Event calendar">
+      <div className="calendar-grid" role="grid" aria-label={translations.eventCalendar}>
         {weekdays.map(([full, short]) => (
           <div className="weekday" role="columnheader" key={full}>
             <span className="weekday-full">{full}</span>
@@ -169,13 +179,15 @@ export function Calendar({
                 <time dateTime={localDateKey(day)}>
                   {day.getDate()}
                 </time>
-                {isToday && <span className="today-label">Today</span>}
+                {isToday && (
+                  <span className="today-label">{translations.today}</span>
+                )}
               </div>
 
               <div className="day-events">
                 {dayEvents.map((event) => {
                   const position = eventDayPosition(event, day, timeZoneOffset);
-                  const context = positionLabel(position);
+                  const context = positionLabel(position, translations);
                   const showTime = position === 'single' || position === 'start';
 
                   return (
@@ -185,9 +197,16 @@ export function Calendar({
                       data-position={position}
                       key={`${event.id}-${localDateKey(day)}`}
                       onClick={() => onSelectEvent(event)}
-                      aria-label={`${event.name}. ${context || 'Event'}${
-                        showTime ? ` at ${formatTime(event.start)}` : ''
-                      }. Open details.`}
+                      aria-label={formatTranslation(
+                        showTime
+                          ? translations.eventDetailsAtTime
+                          : translations.eventDetails,
+                        {
+                          name: event.name,
+                          context: context || translations.event,
+                          time: formatTime(event.start),
+                        },
+                      )}
                     >
                       <span className="event-chip-time">
                         {context || formatTime(event.start)}

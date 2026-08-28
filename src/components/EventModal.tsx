@@ -10,6 +10,7 @@ import {
   withEventId,
 } from '../lib/urls';
 import type { CalendarEvent } from '../types';
+import { formatTranslation, getTranslations } from '../translations';
 
 interface EventModalProps {
   selectedEvent: CalendarEvent | null;
@@ -24,17 +25,19 @@ function DetailField({
   value,
   optional = false,
   monospace = false,
+  missingText = '',
 }: {
   label: string;
   value: string | null;
   optional?: boolean;
   monospace?: boolean;
+  missingText?: string;
 }) {
   return (
     <div className="detail-field">
       <dt>{label}</dt>
       <dd className={monospace ? 'monospace' : undefined}>
-        {value || (optional ? <span className="missing">Not supplied</span> : '—')}
+        {value || (optional ? <span className="missing">{missingText}</span> : '—')}
       </dd>
     </div>
   );
@@ -51,6 +54,7 @@ export function EventModal({
   timeZoneOffset,
   onClose,
 }: EventModalProps) {
+  const translations = getTranslations(locale);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [description, setDescription] = useState('');
@@ -174,7 +178,9 @@ export function EventModal({
       >
         <header className="modal-header">
           <div>
-            <p className="eyebrow">Event record · {event.id}</p>
+            <p className="eyebrow">
+              {formatTranslation(translations.eventRecord, { id: event.id })}
+            </p>
             <h2 id="event-dialog-title">{event.name}</h2>
             <p id="event-dialog-summary" className="modal-subtitle">
               {event.type} · {event.galaxy}
@@ -187,9 +193,9 @@ export function EventModal({
               aria-live="polite"
             >
               {shareState === 'copied'
-                ? 'Event URL copied'
+                ? translations.eventUrlCopied
                 : shareState === 'error'
-                  ? 'Unable to copy URL'
+                  ? translations.copyUrlError
                   : ''}
             </span>
             <button
@@ -198,14 +204,14 @@ export function EventModal({
               onClick={() => void shareEvent()}
               disabled={shareState === 'copying'}
             >
-              Share
+              {translations.share}
             </button>
             <button
               ref={closeButtonRef}
               className="button button-icon modal-close"
               type="button"
               onClick={onClose}
-              aria-label="Close event details"
+              aria-label={translations.closeEventDetails}
             >
               <XIcon />
             </button>
@@ -213,57 +219,82 @@ export function EventModal({
         </header>
 
         <div className="modal-scroll-region">
-          <section className="cover-section" aria-label="Event cover image">
+          <section className="cover-section" aria-label={translations.eventCoverImage}>
             {event.coverImageUrl && !coverFailed ? (
               <img
                 src={event.coverImageUrl}
-                alt={`Cover artwork for ${event.name}`}
+                alt={formatTranslation(translations.coverArtworkFor, {
+                  name: event.name,
+                })}
                 onError={() => setCoverFailed(true)}
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="cover-fallback" role="img" aria-label="No event cover available">
+              <div
+                className="cover-fallback"
+                role="img"
+                aria-label={translations.noEventCover}
+              >
                 <span className="cover-mark" aria-hidden="true">AGT</span>
                 <span>
                   {coverFailed
-                    ? 'Cover image could not be loaded'
-                    : 'No cover image supplied'}
+                    ? translations.coverLoadError
+                    : translations.noCoverSupplied}
                 </span>
               </div>
             )}
           </section>
 
           <section className="detail-section" aria-labelledby="schedule-heading">
-            <h3 id="schedule-heading">Schedule</h3>
+            <h3 id="schedule-heading">{translations.schedule}</h3>
             <dl className="detail-grid schedule-grid">
-              <DetailField label="Start · local" value={formatLocal(event.start)} />
-              <DetailField label="Start · UTC" value={formatUtc(event.start)} monospace />
               <DetailField
-                label="End · local"
-                value={event.end ? formatLocal(event.end) : null}
-                optional
+                label={translations.startLocal}
+                value={formatLocal(event.start)}
               />
               <DetailField
-                label="End · UTC"
+                label={translations.startUtc}
+                value={formatUtc(event.start)}
+                monospace
+              />
+              <DetailField
+                label={translations.endLocal}
+                value={event.end ? formatLocal(event.end) : null}
+                optional
+                missingText={translations.notSupplied}
+              />
+              <DetailField
+                label={translations.endUtc}
                 value={event.end ? formatUtc(event.end) : null}
                 optional
                 monospace
+                missingText={translations.notSupplied}
               />
             </dl>
           </section>
 
           <section className="detail-section" aria-labelledby="location-heading">
-            <h3 id="location-heading">Event information</h3>
+            <h3 id="location-heading">{translations.eventInformation}</h3>
             <dl className="detail-grid">
-              <DetailField label="Event ID" value={event.id} monospace />
-              <DetailField label="Event type" value={event.type} />
-              <DetailField label="Host" value={event.civilization} optional />
-              <DetailField label="Galaxy" value={event.galaxy} />
-              <DetailField label="Region" value={event.region} />
-              <DetailField label="System" value={event.system} />
-              <DetailField label="Planet" value={event.planet} optional />
+              <DetailField label={translations.eventId} value={event.id} monospace />
+              <DetailField label={translations.eventType} value={event.type} />
+              <DetailField
+                label={translations.host}
+                value={event.civilization}
+                optional
+                missingText={translations.notSupplied}
+              />
+              <DetailField label={translations.galaxy} value={event.galaxy} />
+              <DetailField label={translations.region} value={event.region} />
+              <DetailField label={translations.system} value={event.system} />
+              <DetailField
+                label={translations.planet}
+                value={event.planet}
+                optional
+                missingText={translations.notSupplied}
+              />
               <div className="detail-field">
-                <dt>Portal code</dt>
+                <dt>{translations.portalCode}</dt>
                 <dd className="monospace portal-code">
                   <span className="portal-code-value">{event.portalCode}</span>
                   <a
@@ -271,8 +302,8 @@ export function EventModal({
                     href={glyphToolUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    title="Open with Glyph Tool"
-                    aria-label="Open with Glyph Tool"
+                    title={translations.openGlyphTool}
+                    aria-label={translations.openGlyphTool}
                   >
                     <ExternalLinkIcon />
                   </a>
@@ -282,19 +313,18 @@ export function EventModal({
           </section>
 
           <section className="detail-section" aria-labelledby="description-heading">
-            <h3 id="description-heading">Description</h3>
+            <h3 id="description-heading">{translations.description}</h3>
             {!event.descriptionUrl && (
-              <p className="empty-note">No Markdown description supplied.</p>
+              <p className="empty-note">{translations.noMarkdownDescription}</p>
             )}
             {descriptionState === 'loading' && (
               <p className="loading-note" role="status">
-                Loading remote description…
+                {translations.loadingRemoteDescription}
               </p>
             )}
             {descriptionState === 'error' && (
               <p className="error-note" role="alert">
-                The remote description could not be loaded. Event details above
-                are still available.
+                {translations.remoteDescriptionError}
               </p>
             )}
             {descriptionState === 'loaded' && (
@@ -323,15 +353,17 @@ export function EventModal({
           </section>
 
           <section className="detail-section" aria-labelledby="links-heading">
-            <h3 id="links-heading">Related links</h3>
+            <h3 id="links-heading">{translations.relatedLinks}</h3>
             {event.links.length === 0 ? (
-              <p className="empty-note">No related links supplied.</p>
+              <p className="empty-note">{translations.noRelatedLinks}</p>
             ) : (
               <ul className="related-links">
                 {event.links.map((link, index) => (
                   <li key={link}>
                     <a href={link} target="_blank" rel="noopener noreferrer">
-                      Link {index + 1}
+                      {formatTranslation(translations.linkLabel, {
+                        number: index + 1,
+                      })}
                       <span aria-hidden="true"> ↗</span>
                       <span className="link-host">{new URL(link).hostname}</span>
                     </a>
@@ -345,4 +377,3 @@ export function EventModal({
     </div>
   );
 }
-

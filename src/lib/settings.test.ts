@@ -61,4 +61,11 @@ describe('calendar settings', () => {
     );
     assert.throws(() => parseSettingsJson('[]'), /must contain an object/);
   });
+
+  it('localizes import validation errors', () => {
+    assert.throws(
+      () => parseSettingsJson('{"fontScale":"4x"}', 'de'),
+      /nicht unterstützte Schriftgröße/,
+    );
+  });
 });

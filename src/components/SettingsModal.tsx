@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   createDefaultSettings,
+  AUTO_TIME_ZONE,
   FONT_SCALES,
   LOCALES,
   parseSettingsJson,
@@ -13,6 +14,7 @@ import type {
   Locale,
 } from '../lib/settings';
 import { SettingsIcon, XIcon } from './Icons';
+import { getTranslations } from '../translations';
 
 interface SettingsModalProps {
   settings: AppSettings;
@@ -34,6 +36,7 @@ export function SettingsModal({
   onChange,
   onClose,
 }: SettingsModalProps) {
+  const translations = getTranslations(settings.locale);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -102,10 +105,16 @@ export function SettingsModal({
       document.body.appendChild(link);
       link.click();
       link.remove();
-      setImportState({ kind: 'success', message: 'Settings exported.' });
+      setImportState({
+        kind: 'success',
+        message: translations.settingsExported,
+      });
     } catch (error: unknown) {
       console.error('Unable to export calendar settings', error);
-      setImportState({ kind: 'error', message: 'Unable to export settings.' });
+      setImportState({
+        kind: 'error',
+        message: translations.settingsExportError,
+      });
     } finally {
       if (url) URL.revokeObjectURL(url);
     }
@@ -113,19 +122,24 @@ export function SettingsModal({
 
   const resetSettings = () => {
     onChange(createDefaultSettings());
-    setImportState({ kind: 'success', message: 'Settings reset.' });
+    setImportState({ kind: 'success', message: translations.settingsReset });
   };
 
   const importSettings = async (file: File) => {
     try {
-      const imported = parseSettingsJson(await file.text());
+      const imported = parseSettingsJson(await file.text(), settings.locale);
       onChange(imported);
-      setImportState({ kind: 'success', message: 'Settings imported.' });
+      setImportState({
+        kind: 'success',
+        message: translations.settingsImported,
+      });
     } catch (error: unknown) {
       setImportState({
         kind: 'error',
         message:
-          error instanceof Error ? error.message : 'Unable to import settings.',
+          error instanceof Error
+            ? error.message
+            : translations.settingsImportError,
       });
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -151,8 +165,8 @@ export function SettingsModal({
           <div className="settings-modal-title">
             <SettingsIcon className="settings-modal-icon" />
             <div>
-              <p className="eyebrow">Calendar preferences</p>
-              <h2 id="settings-dialog-title">Settings</h2>
+              <p className="eyebrow">{translations.calendarPreferences}</p>
+              <h2 id="settings-dialog-title">{translations.settings}</h2>
             </div>
           </div>
           <button
@@ -160,7 +174,7 @@ export function SettingsModal({
             className="button button-icon settings-close"
             type="button"
             onClick={onClose}
-            aria-label="Close settings"
+            aria-label={translations.closeSettings}
           >
             <XIcon />
           </button>
@@ -169,7 +183,7 @@ export function SettingsModal({
         <div className="settings-scroll-region">
           <div className="settings-grid">
             <label className="settings-field">
-              <span>Font scale</span>
+              <span>{translations.fontScale}</span>
               <select
                 value={settings.fontScale}
                 onChange={(event) =>
@@ -178,15 +192,17 @@ export function SettingsModal({
               >
                 {FONT_SCALES.map((scale) => (
                   <option key={scale} value={scale}>
-                    {scale === '1x' ? '1x (Default)' : scale}
+                    {scale === '1x'
+                      ? `1x (${translations.defaultLabel})`
+                      : scale}
                   </option>
                 ))}
               </select>
-              <small>Scales the complete calendar interface.</small>
+              <small>{translations.fontScaleHelp}</small>
             </label>
 
             <label className="settings-field">
-              <span>Locale</span>
+              <span>{translations.locale}</span>
               <select
                 value={settings.locale}
                 onChange={(event) =>
@@ -199,36 +215,38 @@ export function SettingsModal({
                   </option>
                 ))}
               </select>
-              <small>Controls localized calendar dates and times.</small>
+              <small>{translations.localeHelp}</small>
             </label>
 
             <label className="settings-field">
-              <span>Local timezone</span>
+              <span>{translations.localTimezone}</span>
               <select
                 value={settings.timeZone}
                 onChange={(event) => update('timeZone', event.target.value)}
               >
                 {TIME_ZONE_OPTIONS.map((timeZone) => (
                   <option key={timeZone.value} value={timeZone.value}>
-                    {timeZone.label}
+                    {timeZone.value === AUTO_TIME_ZONE
+                      ? translations.autoTimeZone
+                      : timeZone.label}
                   </option>
                 ))}
               </select>
-              <small>Sets event placement and local schedule displays.</small>
+              <small>{translations.timeZoneHelp}</small>
             </label>
 
             <label className="settings-field">
-              <span>AGT Anthem</span>
+              <span>{translations.agtAnthem}</span>
               <select
                 value={settings.anthem}
                 onChange={(event) =>
                   update('anthem', event.target.value as AnthemSetting)
                 }
               >
-                <option value="mute">Mute (Default)</option>
-                <option value="unmute">Unmute</option>
+                <option value="mute">{translations.muteDefault}</option>
+                <option value="unmute">{translations.unmute}</option>
               </select>
-              <small>Playback begins after your first interaction.</small>
+              <small>{translations.anthemHelp}</small>
             </label>
           </div>
         </div>
@@ -258,17 +276,17 @@ export function SettingsModal({
             type="button"
             onClick={resetSettings}
           >
-            Reset
+            {translations.reset}
           </button>
           <button
             className="button button-secondary"
             type="button"
             onClick={() => fileInputRef.current?.click()}
           >
-            Import
+            {translations.import}
           </button>
           <button className="button button-primary" type="button" onClick={exportSettings}>
-            Export
+            {translations.export}
           </button>
         </footer>
       </div>

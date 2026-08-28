@@ -14,6 +14,7 @@ import {
   saveSettings,
 } from './lib/settings';
 import { withCacheBuster, withEventId } from './lib/urls';
+import { formatTranslation, getTranslations } from './translations';
 import type {
   CalendarEvent,
   DataWarning,
@@ -34,7 +35,7 @@ function App() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [warnings, setWarnings] = useState<DataWarning[]>([]);
   const [loadState, setLoadState] = useState<LoadState>('loading');
-  const [loadError, setLoadError] = useState('');
+  const [loadErrorStatus, setLoadErrorStatus] = useState<number | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [filters, setFilters] = useState<EventFilters>(INITIAL_FILTERS);
   const [viewDate, setViewDate] = useState(() => new Date());
@@ -42,6 +43,10 @@ function App() {
   const [settings, setSettings] = useState(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const csvRef = useRef<string | null>(null);
+  const localeRef = useRef(settings.locale);
+  localeRef.current = settings.locale;
+  const translations = getTranslations(settings.locale);
   const { label: timeZone, offsetMinutes: timeZoneOffset } = useMemo(
     () => resolveTimeZone(settings.timeZone),
     [settings.timeZone],
@@ -49,30 +54,29 @@ function App() {
 
   const loadEvents = useCallback(async () => {
     setLoadState('loading');
-    setLoadError('');
+    setLoadErrorStatus(null);
 
+    let responseStatus: number | null = null;
     try {
       const response = await fetch(withCacheBuster(EVENT_DATABASE_URL), {
         cache: 'no-store',
         headers: { Accept: 'text/csv, text/plain;q=0.9' },
       });
       if (!response.ok) {
-        throw new Error(`The event database returned HTTP ${response.status}.`);
+        responseStatus = response.status;
+        throw new Error(`Event database HTTP ${response.status}`);
       }
 
       const csv = await response.text();
-      const parsed = parseEventsCsv(csv);
+      csvRef.current = csv;
+      const parsed = parseEventsCsv(csv, localeRef.current);
       setEvents(parsed.events);
       setWarnings(parsed.warnings);
       setUpdatedAt(new Date());
       setLoadState('success');
     } catch (error: unknown) {
       console.error('Unable to load AGT event database', error);
-      setLoadError(
-        error instanceof Error
-          ? error.message
-          : 'An unexpected database error occurred.',
-      );
+      setLoadErrorStatus(responseStatus);
       setLoadState('error');
     }
   }, []);
@@ -93,13 +97,23 @@ function App() {
     const root = document.documentElement;
     const previousFontSize = root.style.fontSize;
     const previousLanguage = root.lang;
+    const previousTitle = document.title;
     root.style.fontSize = `${Number.parseFloat(settings.fontScale) * 100}%`;
     root.lang = settings.locale;
+    document.title = translations.productName;
     return () => {
       root.style.fontSize = previousFontSize;
       root.lang = previousLanguage;
+      document.title = previousTitle;
     };
-  }, [settings.fontScale, settings.locale]);
+  }, [settings.fontScale, settings.locale, translations.productName]);
+
+  useEffect(() => {
+    if (!csvRef.current) return;
+    const parsed = parseEventsCsv(csvRef.current, settings.locale);
+    setEvents(parsed.events);
+    setWarnings(parsed.warnings);
+  }, [settings.locale]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -145,11 +159,7 @@ function App() {
     () => filterEvents(events, filters, new Date(), timeZoneOffset),
     [events, filters, timeZoneOffset],
   );
-  const skippedRows = warnings.filter((warning) =>
-    warning.messages.some((message) =>
-      /required|must|cannot|missing required|duplicate/i.test(message),
-    ),
-  ).length;
+  const skippedRows = warnings.filter((warning) => warning.skipped).length;
 
   const selectEvent = useCallback((event: CalendarEvent) => {
     setSelectedEvent(event);
@@ -174,7 +184,7 @@ function App() {
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
-        Skip to calendar
+        {translations.skipToCalendar}
       </a>
 
       <header className="site-header">
@@ -187,8 +197,8 @@ function App() {
               aria-hidden="true"
             />
             <div>
-              <p className="brand-name">Alliance of Galactic Travellers</p>
-              <p className="product-name">AGT Event Calendar</p>
+              <p className="brand-name">{translations.brandName}</p>
+              <p className="product-name">{translations.productName}</p>
             </div>
           </div>
 
@@ -201,21 +211,21 @@ function App() {
               <span className="status-dot" aria-hidden="true" />
               <span>
                 {loadState === 'loading'
-                  ? 'Syncing database'
+                  ? translations.syncingDatabase
                   : loadState === 'error'
-                    ? 'Database offline'
-                    : 'Database live'}
+                    ? translations.databaseOffline
+                    : translations.databaseLive}
               </span>
             </div>
             <button
               className="settings-button"
               type="button"
               onClick={() => setShowSettings(true)}
-              aria-label="Open settings"
+              aria-label={translations.openSettings}
               aria-haspopup="dialog"
               aria-expanded={showSettings}
               aria-controls="settings-dialog"
-              title="Settings"
+              title={translations.settings}
             >
               <SettingsIcon className="settings-button-icon" />
             </button>
@@ -224,8 +234,8 @@ function App() {
               href={BUG_REPORT_URL}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Contact AGT Support"
-              title="Contact AGT Support"
+              aria-label={translations.contactSupport}
+              title={translations.contactSupport}
             >
               <BugIcon className="bug-link-icon" />
             </a>
@@ -236,11 +246,8 @@ function App() {
 
       <main id="main-content" className="main-content">
         <section className="intro" aria-labelledby="page-heading">
-          <h1 id="page-heading">AGT Special Events Calendar</h1>
-          <p>
-            Search and browse past and upcoming AGT gatherings. Select any event to view its
-            schedule, portal address, and description.
-          </p>
+          <h1 id="page-heading">{translations.pageHeading}</h1>
+          <p>{translations.pageIntro}</p>
         </section>
 
         {loadState === 'loading' && (
@@ -249,8 +256,8 @@ function App() {
               <span>AGT</span>
             </div>
             <div>
-              <h2>Synchronizing the galactic archive</h2>
-              <p>Fetching a fresh copy of the event database…</p>
+              <h2>{translations.syncHeading}</h2>
+              <p>{translations.syncDescription}</p>
             </div>
           </section>
         )}
@@ -258,33 +265,40 @@ function App() {
         {loadState === 'error' && (
           <section className="state-panel error-panel" role="alert">
             <div>
-              <p className="eyebrow">Database error</p>
-              <h2>Events could not be loaded</h2>
-              <p>{loadError}</p>
+              <p className="eyebrow">{translations.databaseError}</p>
+              <h2>{translations.eventsCouldNotBeLoaded}</h2>
               <p>
-                Check the connection and confirm that the configured CSV is
-                published and permits browser access.
+                {loadErrorStatus === null
+                  ? translations.unexpectedDatabaseError
+                  : formatTranslation(translations.databaseHttpError, {
+                      status: loadErrorStatus,
+                    })}
               </p>
+              <p>{translations.databaseInstructions}</p>
             </div>
             <button className="button button-primary" type="button" onClick={loadEvents}>
-              Retry sync
+              {translations.retrySync}
             </button>
           </section>
         )}
 
         {loadState === 'success' && (
           <>
-            <section className="data-meta" aria-label="Database status">
+            <section className="data-meta" aria-label={translations.databaseStatus}>
               <div>
                 <span className="data-count">{events.length}</span>
-                <span>{events.length === 1 ? 'valid event record' : 'valid event records'}</span>
+                <span>
+                  {events.length === 1
+                    ? translations.validEventRecord
+                    : translations.validEventRecords}
+                </span>
               </div>
               <div>
                 <span className="data-count">{filteredEvents.length}</span>
-                <span>matching filters</span>
+                <span>{translations.matchingFilters}</span>
               </div>
               <div className="sync-time">
-                <span>Last sync</span>
+                <span>{translations.lastSync}</span>
                 <time dateTime={updatedAt?.toISOString()}>
                   {updatedAt
                     ? formatAtUtcOffset(
@@ -301,7 +315,7 @@ function App() {
                 type="button"
                 onClick={loadEvents}
               >
-                Reload database
+                {translations.reloadDatabase}
               </button>
             </section>
 
@@ -309,19 +323,30 @@ function App() {
               <details className="warning-panel">
                 <summary>
                   <span aria-hidden="true">!</span>
-                  Database loaded with {warnings.length}{' '}
-                  {warnings.length === 1 ? 'warning' : 'warnings'}
-                  {skippedRows > 0 ? `; ${skippedRows} malformed rows skipped` : ''}
+                  {formatTranslation(translations.databaseLoadedWith, {
+                    count: warnings.length,
+                    warningLabel:
+                      warnings.length === 1
+                        ? translations.warning
+                        : translations.warnings,
+                    skipped:
+                      skippedRows > 0
+                        ? formatTranslation(translations.malformedRowsSkipped, {
+                            count: skippedRows,
+                          })
+                        : '',
+                  })}
                 </summary>
                 <div className="warning-details">
-                  <p>
-                    Valid events remain available. Row numbers refer to the
-                    source CSV and are shown for maintainers.
-                  </p>
+                  <p>{translations.validEventsRemain}</p>
                   <ul>
                     {warnings.map((warning, index) => (
                       <li key={`${warning.row}-${index}`}>
-                        <strong>Row {warning.row}:</strong>{' '}
+                        <strong>
+                          {formatTranslation(translations.rowLabel, {
+                            row: warning.row,
+                          })}
+                        </strong>{' '}
                         {warning.messages.join('; ')}
                       </li>
                     ))}
@@ -330,17 +355,19 @@ function App() {
               </details>
             )}
 
-            <FilterBar events={events} filters={filters} onChange={setFilters} />
+            <FilterBar
+              events={events}
+              filters={filters}
+              locale={settings.locale}
+              onChange={setFilters}
+            />
 
             {events.length === 0 ? (
               <section className="state-panel empty-panel">
                 <div>
-                  <p className="eyebrow">Archive empty</p>
-                  <h2>No valid events are available</h2>
-                  <p>
-                    The CSV loaded successfully but contained no rows that met
-                    the required event schema.
-                  </p>
+                  <p className="eyebrow">{translations.archiveEmpty}</p>
+                  <h2>{translations.noValidEvents}</h2>
+                  <p>{translations.emptyArchiveDescription}</p>
                 </div>
               </section>
             ) : (
@@ -360,29 +387,31 @@ function App() {
 
       <footer className="site-footer">
         <div className="footer-content">
-          <nav className="footer-links" aria-label="Alliance of Galactic Travellers">
-            <a href="https://www.nms-agt.com" target="_blank" rel="noopener noreferrer">Home</a>
+          <nav className="footer-links" aria-label={translations.brandName}>
+            <a href="https://www.nms-agt.com" target="_blank" rel="noopener noreferrer">{translations.home}</a>
             <span className="footer-separator" aria-hidden="true">|</span>
-            <a href="https://www.nms-agt.com/about-the-agt" target="_blank" rel="noopener noreferrer">About</a>
+            <a href="https://www.nms-agt.com/about-the-agt" target="_blank" rel="noopener noreferrer">{translations.about}</a>
             <span className="footer-separator" aria-hidden="true">|</span>
-            <a href="https://www.nms-agt.com/team" target="_blank" rel="noopener noreferrer">Team</a>
+            <a href="https://www.nms-agt.com/team" target="_blank" rel="noopener noreferrer">{translations.team}</a>
             <span className="footer-separator" aria-hidden="true">|</span>
-            <a href="https://www.nms-agt.com/contribute" target="_blank" rel="noopener noreferrer">Contribute</a>
+            <a href="https://www.nms-agt.com/contribute" target="_blank" rel="noopener noreferrer">{translations.contribute}</a>
             <span className="footer-separator" aria-hidden="true">|</span>
-            <a href="https://www.nms-agt.com/agt-galactic-archives" target="_blank" rel="noopener noreferrer">Galactic Archives</a>
+            <a href="https://www.nms-agt.com/agt-galactic-archives" target="_blank" rel="noopener noreferrer">{translations.galacticArchives}</a>
             <span className="footer-separator" aria-hidden="true">|</span>
-            <a href="https://www.nms-agt.com/engage" target="_blank" rel="noopener noreferrer">Engage</a>
+            <a href="https://www.nms-agt.com/engage" target="_blank" rel="noopener noreferrer">{translations.engage}</a>
             <span className="footer-separator" aria-hidden="true">|</span>
-            <a href="https://www.nms-agt.com/agt-navi" target="_blank" rel="noopener noreferrer">AGT NAVI</a>
+            <a href="https://www.nms-agt.com/agt-navi" target="_blank" rel="noopener noreferrer">{translations.agtNavi}</a>
             <span className="footer-separator" aria-hidden="true">|</span>
-            <a href="https://www.nms-agt.com/terms" target="_blank" rel="noopener noreferrer">Terms</a>
+            <a href="https://www.nms-agt.com/terms" target="_blank" rel="noopener noreferrer">{translations.terms}</a>
             <span className="footer-separator" aria-hidden="true">|</span>
-            <a href="https://www.nms-agt.com/support" target="_blank" rel="noopener noreferrer">Support</a>
+            <a href="https://www.nms-agt.com/support" target="_blank" rel="noopener noreferrer">{translations.support}</a>
             <span className="footer-separator" aria-hidden="true">|</span>
-            <a href="https://www.nms-agt.com/terms/copyright" target="_blank" rel="noopener noreferrer">Copyright</a>
+            <a href="https://www.nms-agt.com/terms/copyright" target="_blank" rel="noopener noreferrer">{translations.copyright}</a>
           </nav>
           <p className="footer-copyright">
-            &copy; {new Date().getFullYear()} Alliance of Galactic Travellers
+            {formatTranslation(translations.copyrightNotice, {
+              year: new Date().getFullYear(),
+            })}
           </p>
         </div>
       </footer>

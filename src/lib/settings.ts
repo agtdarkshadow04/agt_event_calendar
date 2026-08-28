@@ -1,17 +1,10 @@
+import { getTranslations, LOCALES } from '../translations';
+import type { Locale } from '../translations';
+
 export const FONT_SCALES = ['1x', '1.5x', '2x'] as const;
 
-export const LOCALES = [
-  { value: 'en', label: 'English' },
-  { value: 'fr', label: 'Français (French)' },
-  { value: 'de', label: 'Deutsch (German)' },
-  { value: 'es', label: 'Español (Spanish)' },
-  { value: 'pt', label: 'Português (Portuguese (Brazilian))' },
-  { value: 'it', label: 'Italiano (Italian)' },
-  { value: 'th', label: 'ไทย (Thai)' },
-  { value: 'zh', label: '中文 (Mandarin Chinese)' },
-  { value: 'hi', label: 'हिन्दी (Hindi)' },
-  { value: 'ja', label: '日本語 (Japanese)' },
-] as const;
+export { LOCALES } from '../translations';
+export type { Locale } from '../translations';
 
 const UTC_OFFSETS = [
   -720, -660, -600, -570, -540, -480, -420, -360, -300, -240, -210,
@@ -20,7 +13,6 @@ const UTC_OFFSETS = [
 ] as const;
 
 export type FontScale = (typeof FONT_SCALES)[number];
-export type Locale = (typeof LOCALES)[number]['value'];
 export type AnthemSetting = 'mute' | 'unmute';
 
 export interface AppSettings {
@@ -96,23 +88,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function parseSettingsJson(json: string): AppSettings {
-  const parsed: unknown = JSON.parse(json);
+export function parseSettingsJson(json: string, locale: Locale = 'en'): AppSettings {
+  const translations = getTranslations(locale);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new Error(translations.invalidSettingsJson);
+  }
   if (!isRecord(parsed)) {
-    throw new Error('Settings JSON must contain an object.');
+    throw new Error(translations.settingsJsonObject);
   }
 
   if (!FONT_SCALE_SET.has(String(parsed.fontScale))) {
-    throw new Error('Settings JSON contains an unsupported font scale.');
+    throw new Error(translations.unsupportedFontScale);
   }
   if (!LOCALE_SET.has(String(parsed.locale))) {
-    throw new Error('Settings JSON contains an unsupported locale.');
+    throw new Error(translations.unsupportedLocale);
   }
   if (!TIME_ZONE_SET.has(String(parsed.timeZone))) {
-    throw new Error('Settings JSON contains an unsupported timezone.');
+    throw new Error(translations.unsupportedTimezone);
   }
   if (parsed.anthem !== 'mute' && parsed.anthem !== 'unmute') {
-    throw new Error('Settings JSON contains an unsupported anthem setting.');
+    throw new Error(translations.unsupportedAnthem);
   }
 
   return {

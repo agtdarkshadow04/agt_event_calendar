@@ -18,6 +18,7 @@ export interface CalendarEvent {
 export interface DataWarning {
   row: number;
   messages: string[];
+  skipped: boolean;
 }
 
 export interface ParseEventsResult {
@@ -32,4 +33,3 @@ export interface EventFilters {
   galaxy: string;
   dateContext: 'all' | 'upcoming' | 'next30';
 }
-

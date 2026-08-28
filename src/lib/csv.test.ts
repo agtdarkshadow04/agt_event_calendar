@@ -67,5 +67,14 @@ describe('parseEventsCsv', () => {
     assert.equal(result.events.length, 1);
     assert.equal(result.events[0].name, 'First Event');
     assert.match(result.warnings[0].messages.join(' '), /duplicate EVENT_ID/i);
+    assert.equal(result.warnings[0].skipped, true);
+  });
+
+  it('localizes validation warnings for the selected locale', () => {
+    const csv = `${header}\nZZZZ,Bad ID,2026-09-01T18:30:00Z,,,Meeting,,,,Euclid,Region,System,,0123ABCD4567`;
+
+    const result = parseEventsCsv(csv, 'fr');
+
+    assert.match(result.warnings[0].messages.join(' '), /hexadécimaux/i);
   });
 });
