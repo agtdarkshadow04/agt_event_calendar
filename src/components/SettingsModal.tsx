@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  createDefaultSettings,
   FONT_SCALES,
   LOCALES,
   parseSettingsJson,
@@ -108,6 +109,11 @@ export function SettingsModal({
     } finally {
       if (url) URL.revokeObjectURL(url);
     }
+  };
+
+  const resetSettings = () => {
+    onChange(createDefaultSettings());
+    setImportState({ kind: 'success', message: 'Settings reset.' });
   };
 
   const importSettings = async (file: File) => {
@@ -247,6 +253,13 @@ export function SettingsModal({
               if (file) void importSettings(file);
             }}
           />
+          <button
+            className="button button-secondary"
+            type="button"
+            onClick={resetSettings}
+          >
+            Reset
+          </button>
           <button
             className="button button-secondary"
             type="button"
