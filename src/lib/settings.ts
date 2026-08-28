@@ -137,4 +137,3 @@ export function loadSettings(): AppSettings {
 export function saveSettings(settings: AppSettings): void {
   window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
 }
-

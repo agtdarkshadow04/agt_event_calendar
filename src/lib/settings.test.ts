@@ -62,4 +62,3 @@ describe('calendar settings', () => {
     assert.throws(() => parseSettingsJson('[]'), /must contain an object/);
   });
 });
-
