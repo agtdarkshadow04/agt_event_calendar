@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { ExternalLinkIcon, XIcon } from './Icons';
+import { ExternalLinkIcon, ShareIcon, XIcon } from './Icons';
 import { formatAtUtcOffset } from '../lib/date';
 import {
   buildGlyphToolUrl,
@@ -199,12 +199,13 @@ export function EventModal({
                   : ''}
             </span>
             <button
-              className="button button-secondary"
+              className="button button-secondary button-icon"
               type="button"
               onClick={() => void shareEvent()}
               disabled={shareState === 'copying'}
+              aria-label={translations.share}
             >
-              {translations.share}
+              <ShareIcon />
             </button>
             <button
               ref={closeButtonRef}

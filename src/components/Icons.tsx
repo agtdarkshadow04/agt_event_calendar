@@ -76,6 +76,18 @@ export function ExternalLinkIcon({ className }: Omit<IconProps, 'children'>) {
   );
 }
 
+export function ShareIcon({ className }: Omit<IconProps, 'children'>) {
+  return (
+    <Icon className={className}>
+      <path d="m8.2 10.8 7.6-4.6" />
+      <path d="m8.2 13.2 7.6 4.6" />
+      <circle cx="18" cy="5" r="2.5" />
+      <circle cx="6" cy="12" r="2.5" />
+      <circle cx="18" cy="19" r="2.5" />
+    </Icon>
+  );
+}
+
 export function XIcon({ className }: Omit<IconProps, 'children'>) {
   return (
     <Icon className={className}>
