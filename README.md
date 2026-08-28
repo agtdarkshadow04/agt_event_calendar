@@ -4,6 +4,9 @@
 
 ## Branches
 
-* `main`: Default repository; licensing and project documentation
-* `staging`: Development repository; complete project code and assets. Changes are automatically pulled by Amplify.
-* `prod`: Production repository; complete project code and assets. Changes must be manually pulled.
+* `main`
+  * Default repository; licensing and project documentation
+* `staging`
+  * Development repository; complete project code and assets. Changes are automatically pulled by Amplify.
+* `prod`
+  * Production repository; complete project code and assets. Changes must be manually pulled.
