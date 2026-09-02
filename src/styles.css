@@ -6,6 +6,13 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'Twemoji Country Flags';
+  src: url('https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1.10/dist/TwemojiCountryFlags.woff2') format('woff2');
+  font-display: swap;
+  unicode-range: U+1F1E6-1F1FF;
+}
+
 :root {
   color-scheme: dark;
   font-family: 'NMS Futura', Inter, ui-sans-serif, system-ui, sans-serif;
@@ -1004,6 +1011,10 @@ summary:focus-visible {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.72rem;
   cursor: pointer;
+}
+
+.settings-field .locale-select {
+  font-family: 'Twemoji Country Flags', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .settings-field select:focus-visible {

@@ -204,6 +204,7 @@ export function SettingsModal({
             <label className="settings-field">
               <span>{translations.locale}</span>
               <select
+                className="locale-select"
                 value={settings.locale}
                 onChange={(event) =>
                   update('locale', event.target.value as Locale)
@@ -211,7 +212,7 @@ export function SettingsModal({
               >
                 {LOCALES.map((locale) => (
                   <option key={locale.value} value={locale.value}>
-                    {locale.label}
+                    {locale.flag} {locale.label}
                   </option>
                 ))}
               </select>

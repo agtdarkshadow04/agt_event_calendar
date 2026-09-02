@@ -1,14 +1,14 @@
 export const LOCALES = [
-  { value: 'en', label: 'English' },
-  { value: 'fr', label: 'Français (French)' },
-  { value: 'de', label: 'Deutsch (German)' },
-  { value: 'es', label: 'Español (Spanish)' },
-  { value: 'pt', label: 'Português (Portuguese (Brazilian))' },
-  { value: 'it', label: 'Italiano (Italian)' },
-  { value: 'th', label: 'ไทย (Thai)' },
-  { value: 'zh', label: '中文 (Mandarin Chinese)' },
-  { value: 'hi', label: 'हिन्दी (Hindi)' },
-  { value: 'ja', label: '日本語 (Japanese)' },
+  { value: 'en', label: 'English', flag: '🇬🇧' },
+  { value: 'fr', label: 'Français (French)', flag: '🇫🇷' },
+  { value: 'de', label: 'Deutsch (German)', flag: '🇩🇪' },
+  { value: 'es', label: 'Español (Spanish)', flag: '🇪🇸' },
+  { value: 'pt', label: 'Português (Portuguese (Brazilian))', flag: '🇧🇷' },
+  { value: 'it', label: 'Italiano (Italian)', flag: '🇮🇹' },
+  { value: 'th', label: 'ไทย (Thai)', flag: '🇹🇭' },
+  { value: 'zh', label: '中文 (Mandarin Chinese)', flag: '🇨🇳' },
+  { value: 'hi', label: 'हिन्दी (Hindi)', flag: '🇮🇳' },
+  { value: 'ja', label: '日本語 (Japanese)', flag: '🇯🇵' },
 ] as const;
 
 export type Locale = (typeof LOCALES)[number]['value'];
