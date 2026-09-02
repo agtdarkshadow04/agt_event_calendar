@@ -217,6 +217,16 @@ function App() {
                     : translations.databaseLive}
               </span>
             </div>
+            <a
+              className="bug-link"
+              href={BUG_REPORT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={translations.contactSupport}
+              title={translations.contactSupport}
+            >
+              <BugIcon className="bug-link-icon" />
+            </a>
             <button
               className="settings-button"
               type="button"
@@ -229,16 +239,6 @@ function App() {
             >
               <SettingsIcon className="settings-button-icon" />
             </button>
-            <a
-              className="bug-link"
-              href={BUG_REPORT_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={translations.contactSupport}
-              title={translations.contactSupport}
-            >
-              <BugIcon className="bug-link-icon" />
-            </a>
           </div>
         </div>
         <div className="header-divider" />
