@@ -1,7 +1,7 @@
 import { getTranslations, LOCALES } from '../translations';
 import type { Locale } from '../translations';
 
-export const FONT_SCALES = ['1x', '1.5x', '2x'] as const;
+export const FONT_SCALES = ['1x', '1.25x', '1.5x', '1.75x', '2x'] as const;
 
 export { LOCALES } from '../translations';
 export type { Locale } from '../translations';

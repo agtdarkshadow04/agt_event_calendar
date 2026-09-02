@@ -43,16 +43,18 @@ describe('calendar settings', () => {
     assert.equal(parseUtcOffset('UTC-03:30'), -210);
   });
 
-  it('round-trips valid exported settings', () => {
-    const settings = {
-      fontScale: '1.5x',
-      locale: 'ja',
-      timeZone: 'Auto',
-      anthem: 'mute',
-    } as const;
+  for (const fontScale of ['1x', '1.25x', '1.5x', '1.75x', '2x'] as const) {
+    it(`round-trips valid exported settings at ${fontScale}`, () => {
+      const settings = {
+        fontScale,
+        locale: 'ja',
+        timeZone: 'Auto',
+        anthem: 'mute',
+      } as const;
 
-    assert.deepEqual(parseSettingsJson(JSON.stringify(settings)), settings);
-  });
+      assert.deepEqual(parseSettingsJson(JSON.stringify(settings)), settings);
+    });
+  }
 
   it('rejects invalid imported settings instead of partially applying them', () => {
     assert.throws(
