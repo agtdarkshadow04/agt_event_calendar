@@ -46,7 +46,7 @@ const english = {
   validEventRecords: 'valid event records',
   matchingFilters: 'matching filters',
   lastSync: 'Last sync',
-  reloadDatabase: 'Reload database',
+  reloadDatabase: 'Reload Database',
   databaseLoadedWith: 'Database loaded with {{count}} {{warningLabel}}{{skipped}}',
   warning: 'warning',
   warnings: 'warnings',

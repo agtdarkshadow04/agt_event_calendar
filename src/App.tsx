@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar } from './components/Calendar';
 import { EventModal } from './components/EventModal';
 import { FilterBar } from './components/FilterBar';
-import { BugIcon, PlusIcon, SettingsIcon } from './components/Icons';
+import { BugIcon, PlusIcon, ReloadIcon, SettingsIcon } from './components/Icons';
 import { SettingsModal } from './components/SettingsModal';
 import { BUG_REPORT_URL, EVENT_DATABASE_URL, EVENT_FORM_URL } from './config';
 import { parseEventsCsv } from './lib/csv';
@@ -321,11 +321,13 @@ function App() {
                 </time>
               </div>
               <button
-                className="button button-secondary"
+                className="button button-secondary button-icon"
                 type="button"
                 onClick={loadEvents}
+                aria-label={translations.reloadDatabase}
+                title={translations.reloadDatabase}
               >
-                {translations.reloadDatabase}
+                <ReloadIcon />
               </button>
             </section>
 

@@ -32,6 +32,15 @@ export function PlusIcon({ className }: Omit<IconProps, 'children'>) {
   );
 }
 
+export function ReloadIcon({ className }: Omit<IconProps, 'children'>) {
+  return (
+    <Icon className={className}>
+      <path d="M20 10a8 8 0 1 0-2 8" />
+      <path d="M20 4v6h-6" />
+    </Icon>
+  );
+}
+
 export function BugIcon({ className }: Omit<IconProps, 'children'>) {
   return (
     <Icon className={className}>

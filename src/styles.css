@@ -1588,11 +1588,6 @@ summary:focus-visible {
     gap: 0.9rem 1.4rem;
   }
 
-  .data-meta .button {
-    width: 100%;
-    margin-left: 0;
-  }
-
   .calendar-summary {
     padding-inline: 0.75rem;
   }
