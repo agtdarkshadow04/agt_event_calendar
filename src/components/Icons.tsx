@@ -23,6 +23,15 @@ function Icon({ children, className }: IconProps) {
   );
 }
 
+export function PlusIcon({ className }: Omit<IconProps, 'children'>) {
+  return (
+    <Icon className={className}>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </Icon>
+  );
+}
+
 export function BugIcon({ className }: Omit<IconProps, 'children'>) {
   return (
     <Icon className={className}>

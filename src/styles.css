@@ -261,6 +261,7 @@ summary:focus-visible {
   box-shadow: 0 0 8px rgba(255, 5, 0, 0.7);
 }
 
+.add-event-link,
 .bug-link {
   display: inline-flex;
   align-items: center;
@@ -312,6 +313,7 @@ summary:focus-visible {
   display: block;
 }
 
+.add-event-link-icon,
 .bug-link-icon {
   width: 1.25rem;
   height: 1.25rem;
@@ -1415,6 +1417,7 @@ summary:focus-visible {
     font-size: 0;
   }
 
+  .add-event-link-icon,
   .bug-link-icon {
     width: 1.2rem;
     height: 1.2rem;

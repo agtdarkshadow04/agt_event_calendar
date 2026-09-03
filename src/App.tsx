@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar } from './components/Calendar';
 import { EventModal } from './components/EventModal';
 import { FilterBar } from './components/FilterBar';
-import { BugIcon, SettingsIcon } from './components/Icons';
+import { BugIcon, PlusIcon, SettingsIcon } from './components/Icons';
 import { SettingsModal } from './components/SettingsModal';
-import { BUG_REPORT_URL, EVENT_DATABASE_URL } from './config';
+import { BUG_REPORT_URL, EVENT_DATABASE_URL, EVENT_FORM_URL } from './config';
 import { parseEventsCsv } from './lib/csv';
 import { formatAtUtcOffset } from './lib/date';
 import { filterEvents } from './lib/filter';
@@ -217,6 +217,16 @@ function App() {
                     : translations.databaseLive}
               </span>
             </div>
+            <a
+              className="add-event-link"
+              href={EVENT_FORM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={translations.addEvent}
+              title={translations.addEvent}
+            >
+              <PlusIcon className="add-event-link-icon" />
+            </a>
             <a
               className="bug-link"
               href={BUG_REPORT_URL}
