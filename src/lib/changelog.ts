@@ -22,7 +22,11 @@ export function parseChangeLogCsv(csv: string): ChangeLogEntry[] {
       currentEntry = { date, changes: [] };
       entries.push(currentEntry);
     }
-    if (change && currentEntry) currentEntry.changes.push(change);
+    if (change && currentEntry) {
+      currentEntry.changes.push(
+        ...change.split(',').map((value) => value.trim()).filter(Boolean),
+      );
+    }
   }
 
   return entries;
