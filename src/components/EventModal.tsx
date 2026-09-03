@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { ExternalLinkIcon, ShareIcon, XIcon } from './Icons';
+import { BookmarkIcon, ExternalLinkIcon, ShareIcon, XIcon } from './Icons';
 import { formatAtUtcOffset } from '../lib/date';
 import {
   buildGlyphToolUrl,
@@ -17,6 +17,9 @@ interface EventModalProps {
   locale: string;
   timeZone: string;
   timeZoneOffset: number;
+  bookmarked: boolean;
+  bookmarkError: string;
+  onToggleBookmark: (id: string) => void;
   onClose: () => void;
 }
 
@@ -52,6 +55,9 @@ export function EventModal({
   locale,
   timeZone,
   timeZoneOffset,
+  bookmarked,
+  bookmarkError,
+  onToggleBookmark,
   onClose,
 }: EventModalProps) {
   const translations = getTranslations(locale);
@@ -199,6 +205,16 @@ export function EventModal({
                   : ''}
             </span>
             <button
+              className="button button-secondary button-icon event-bookmark-button"
+              type="button"
+              onClick={() => onToggleBookmark(event.id)}
+              aria-label={bookmarked ? translations.removeBookmark : translations.bookmark}
+              title={bookmarked ? translations.removeBookmark : translations.bookmark}
+              aria-pressed={bookmarked}
+            >
+              <BookmarkIcon />
+            </button>
+            <button
               className="button button-secondary button-icon"
               type="button"
               onClick={() => void shareEvent()}
@@ -220,6 +236,7 @@ export function EventModal({
         </header>
 
         <div className="modal-scroll-region">
+          {bookmarkError && <p className="error-note" role="alert">{bookmarkError}</p>}
           <section className="cover-section" aria-label={translations.eventCoverImage}>
             {event.coverImageUrl && !coverFailed ? (
               <img

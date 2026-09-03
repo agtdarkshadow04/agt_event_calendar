@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar } from './components/Calendar';
+import { BookmarksModal } from './components/BookmarksModal';
 import { EventModal } from './components/EventModal';
 import { FilterBar } from './components/FilterBar';
-import { BugIcon, PlusIcon, ReloadIcon, SettingsIcon } from './components/Icons';
+import { BookmarkIcon, BugIcon, PlusIcon, ReloadIcon, SettingsIcon } from './components/Icons';
 import { SettingsModal } from './components/SettingsModal';
 import { BUG_REPORT_URL, EVENT_DATABASE_URL, EVENT_FORM_URL } from './config';
 import { parseEventsCsv } from './lib/csv';
+import { loadBookmarks, saveBookmarks } from './lib/bookmarks';
 import { formatAtUtcOffset } from './lib/date';
 import { filterEvents } from './lib/filter';
 import {
@@ -31,6 +33,11 @@ const INITIAL_FILTERS: EventFilters = {
 
 type LoadState = 'loading' | 'success' | 'error';
 
+interface BookmarkState {
+  ids: string[];
+  error: 'load' | 'save' | null;
+}
+
 function App() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [warnings, setWarnings] = useState<DataWarning[]>([]);
@@ -42,11 +49,26 @@ function App() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [settings, setSettings] = useState(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
+  const [showBookmarks, setShowBookmarks] = useState(false);
+  const [bookmarks, setBookmarks] = useState<BookmarkState>(() => {
+    try {
+      return { ids: loadBookmarks(), error: null };
+    } catch (error: unknown) {
+      console.error('Unable to load cached bookmarks', error);
+      return { ids: [], error: 'load' };
+    }
+  });
+  const bookmarksRef = useRef(bookmarks);
   const audioRef = useRef<HTMLAudioElement>(null);
   const csvRef = useRef<string | null>(null);
   const localeRef = useRef(settings.locale);
   localeRef.current = settings.locale;
   const translations = getTranslations(settings.locale);
+  const bookmarkError = bookmarks.error === 'load'
+    ? translations.bookmarksLoadError
+    : bookmarks.error === 'save'
+      ? translations.bookmarksSaveError
+      : '';
   const { label: timeZone, offsetMinutes: timeZoneOffset } = useMemo(
     () => resolveTimeZone(settings.timeZone),
     [settings.timeZone],
@@ -180,6 +202,33 @@ function App() {
   }, []);
 
   const closeSettings = useCallback(() => setShowSettings(false), []);
+  const closeBookmarks = useCallback(() => setShowBookmarks(false), []);
+
+  const changeBookmarks = useCallback((update: (ids: string[]) => string[]) => {
+    try {
+      const ids = update(bookmarksRef.current.ids);
+      saveBookmarks(ids);
+      bookmarksRef.current = { ids, error: null };
+      setBookmarks(bookmarksRef.current);
+      return true;
+    } catch (error: unknown) {
+      console.error('Unable to cache bookmarks', error);
+      bookmarksRef.current = { ...bookmarksRef.current, error: 'save' };
+      setBookmarks(bookmarksRef.current);
+      return false;
+    }
+  }, []);
+
+  const toggleBookmark = (id: string) => {
+    changeBookmarks((ids) => ids.includes(id)
+      ? ids.filter((savedId) => savedId !== id)
+      : [...ids, id]);
+  };
+
+  const selectBookmarkedEvent = (event: CalendarEvent) => {
+    setShowBookmarks(false);
+    selectEvent(event);
+  };
 
   return (
     <div className="app-shell">
@@ -237,6 +286,18 @@ function App() {
             >
               <BugIcon className="bug-link-icon" />
             </a>
+            <button
+              className="bookmarks-button"
+              type="button"
+              onClick={() => setShowBookmarks(true)}
+              aria-label={translations.bookmarks}
+              aria-haspopup="dialog"
+              aria-expanded={showBookmarks}
+              aria-controls="bookmarks-dialog"
+              title={translations.bookmarks}
+            >
+              <BookmarkIcon className="bookmarks-button-icon" />
+            </button>
             <button
               className="settings-button"
               type="button"
@@ -443,11 +504,28 @@ function App() {
         />
       )}
 
+      {showBookmarks && (
+        <BookmarksModal
+          ids={bookmarks.ids}
+          events={events}
+          loadState={loadState}
+          locale={settings.locale}
+          timeZoneOffset={timeZoneOffset}
+          bookmarkError={bookmarkError}
+          onChange={changeBookmarks}
+          onSelectEvent={selectBookmarkedEvent}
+          onClose={closeBookmarks}
+        />
+      )}
+
       <EventModal
         selectedEvent={selectedEvent}
         locale={settings.locale}
         timeZone={timeZone}
         timeZoneOffset={timeZoneOffset}
+        bookmarked={selectedEvent !== null && bookmarks.ids.includes(selectedEvent.id)}
+        bookmarkError={bookmarkError}
+        onToggleBookmark={toggleBookmark}
         onClose={closeSelectedEvent}
       />
     </div>

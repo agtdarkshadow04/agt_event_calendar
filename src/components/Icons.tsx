@@ -94,6 +94,14 @@ export function ExternalLinkIcon({ className }: Omit<IconProps, 'children'>) {
   );
 }
 
+export function BookmarkIcon({ className }: Omit<IconProps, 'children'>) {
+  return (
+    <Icon className={className}>
+      <path d="M6 3h12v18l-6-4-6 4z" />
+    </Icon>
+  );
+}
+
 export function ShareIcon({ className }: Omit<IconProps, 'children'>) {
   return (
     <Icon className={className}>
