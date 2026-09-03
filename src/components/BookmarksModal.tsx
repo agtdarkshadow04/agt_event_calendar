@@ -152,6 +152,7 @@ export function BookmarksModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="bookmarks-dialog-title"
+        aria-describedby="bookmarks-backup-notice"
         ref={dialogRef}
       >
         <header className="settings-modal-header">
@@ -171,6 +172,9 @@ export function BookmarksModal({
         </header>
 
         <div className="settings-scroll-region">
+          <p id="bookmarks-backup-notice" className="bookmarks-warning">
+            {translations.bookmarksBackupNotice}
+          </p>
           {bookmarkError && <p className="error-note" role="alert">{bookmarkError}</p>}
           <label className="field">
             <span>{translations.search}</span>
