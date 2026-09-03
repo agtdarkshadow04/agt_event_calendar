@@ -1445,13 +1445,9 @@ summary:focus-visible {
     height: 2.25rem;
   }
 
-  .brand-name {
-    max-width: 12rem;
-    font-size: 0.6rem;
-  }
-
+  .brand-name,
   .product-name {
-    font-size: 0.48rem;
+    display: none;
   }
 
   .connection-status span:last-child,
@@ -1596,10 +1592,6 @@ summary:focus-visible {
 }
 
 @media (max-width: 520px) {
-  .brand-name {
-    max-width: 9rem;
-  }
-
   .filter-grid {
     grid-template-columns: 1fr;
   }
