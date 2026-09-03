@@ -13,12 +13,13 @@ import type {
   FontScale,
   Locale,
 } from '../lib/settings';
-import { HistoryIcon, SettingsIcon, XIcon } from './Icons';
+import { HistoryIcon, ReloadIcon, SettingsIcon, XIcon } from './Icons';
 import { getTranslations } from '../translations';
 
 interface SettingsModalProps {
   settings: AppSettings;
   onChange: (settings: AppSettings) => void;
+  onReloadDatabase?: () => void;
   onOpenChangeLog: () => void;
   onClose: () => void;
 }
@@ -35,6 +36,7 @@ function exportFileName(): string {
 export function SettingsModal({
   settings,
   onChange,
+  onReloadDatabase,
   onOpenChangeLog,
   onClose,
 }: SettingsModalProps) {
@@ -183,6 +185,17 @@ export function SettingsModal({
             >
               <HistoryIcon />
             </button>
+            {onReloadDatabase && (
+              <button
+                className="button button-secondary button-icon"
+                type="button"
+                onClick={onReloadDatabase}
+                aria-label={translations.reloadDatabase}
+                title={translations.reloadDatabase}
+              >
+                <ReloadIcon />
+              </button>
+            )}
             <button
               ref={closeButtonRef}
               className="button button-icon settings-close"

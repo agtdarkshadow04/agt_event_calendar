@@ -4,7 +4,7 @@ import { BookmarksModal } from './components/BookmarksModal';
 import { ChangeLogModal } from './components/ChangeLogModal';
 import { EventModal } from './components/EventModal';
 import { FilterBar } from './components/FilterBar';
-import { BookmarkIcon, BugIcon, PlusIcon, ReloadIcon, SettingsIcon } from './components/Icons';
+import { BookmarkIcon, BugIcon, PlusIcon, SettingsIcon } from './components/Icons';
 import { SettingsModal } from './components/SettingsModal';
 import { BUG_REPORT_URL, EVENT_DATABASE_URL, EVENT_FORM_URL } from './config';
 import { parseEventsCsv } from './lib/csv';
@@ -388,15 +388,6 @@ function App() {
                     : ''}
                 </time>
               </div>
-              <button
-                className="button button-secondary button-icon"
-                type="button"
-                onClick={loadEvents}
-                aria-label={translations.reloadDatabase}
-                title={translations.reloadDatabase}
-              >
-                <ReloadIcon />
-              </button>
             </section>
 
             {warnings.length > 0 && (
@@ -507,6 +498,7 @@ function App() {
         <SettingsModal
           settings={settings}
           onChange={setSettings}
+          onReloadDatabase={loadState === 'success' ? loadEvents : undefined}
           onOpenChangeLog={openChangeLog}
           onClose={closeSettings}
         />
