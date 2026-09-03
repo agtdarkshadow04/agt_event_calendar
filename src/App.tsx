@@ -375,6 +375,10 @@ function App() {
                 <span className="data-count">{filteredEvents.length}</span>
                 <span>{translations.matchingFilters}</span>
               </div>
+              <div>
+                <span className="data-count">{bookmarks.ids.length}</span>
+                <span>{translations.bookmarked}</span>
+              </div>
               <div className="sync-time">
                 <span>{translations.lastSync}</span>
                 <time dateTime={updatedAt?.toISOString()}>
