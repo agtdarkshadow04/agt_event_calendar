@@ -276,16 +276,6 @@ function App() {
             >
               <PlusIcon className="add-event-link-icon" />
             </a>
-            <a
-              className="bug-link"
-              href={BUG_REPORT_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={translations.contactSupport}
-              title={translations.contactSupport}
-            >
-              <BugIcon className="bug-link-icon" />
-            </a>
             <button
               className="bookmarks-button"
               type="button"
@@ -298,6 +288,16 @@ function App() {
             >
               <BookmarkIcon className="bookmarks-button-icon" />
             </button>
+            <a
+              className="bug-link"
+              href={BUG_REPORT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={translations.contactSupport}
+              title={translations.contactSupport}
+            >
+              <BugIcon className="bug-link-icon" />
+            </a>
             <button
               className="settings-button"
               type="button"

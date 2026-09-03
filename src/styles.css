@@ -300,11 +300,13 @@ summary:focus-visible {
 }
 
 .add-event-link:hover .add-event-link-icon,
-.bug-link:hover .bug-link-icon {
+.bug-link:hover .bug-link-icon,
+.bookmarks-button:hover .bookmarks-button-icon {
   transform: rotate(360deg) scale(1.15);
 }
 
-.bug-link:active .bug-link-icon {
+.bug-link:active .bug-link-icon,
+.bookmarks-button:active .bookmarks-button-icon {
   transform: rotate(720deg) scale(0.9);
 }
 
@@ -316,14 +318,14 @@ summary:focus-visible {
 }
 
 .add-event-link-icon,
-.bug-link-icon {
+.bug-link-icon,
+.bookmarks-button-icon {
   width: 1.25rem;
   height: 1.25rem;
   transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.settings-button-icon,
-.bookmarks-button-icon {
+.settings-button-icon {
   width: 1.25rem;
   height: 1.25rem;
   transition: transform 0.3s ease;
