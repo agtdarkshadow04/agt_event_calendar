@@ -13,7 +13,7 @@ export function parseChangeLogCsv(csv: string): ChangeLogEntry[] {
   const entries: ChangeLogEntry[] = [];
   let currentEntry: ChangeLogEntry | null = null;
 
-  for (const row of parsed.data) {
+  for (const row of parsed.data.slice(1)) {
     const date = String(row[0] ?? '').replace(/^\uFEFF/, '').trim();
     const change = String(row[1] ?? '').trim();
     if (!date && !change) continue;
