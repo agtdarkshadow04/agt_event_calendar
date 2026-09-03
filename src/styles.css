@@ -298,6 +298,7 @@ summary:focus-visible {
   transform: rotate(-90deg) scale(0.9);
 }
 
+.add-event-link:hover .add-event-link-icon,
 .bug-link:hover .bug-link-icon {
   transform: rotate(360deg) scale(1.15);
 }
