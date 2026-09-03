@@ -63,6 +63,7 @@ export function EventModal({
   const translations = getTranslations(locale);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const shareRequestRef = useRef(0);
   const [description, setDescription] = useState('');
   const [descriptionState, setDescriptionState] = useState<
     'idle' | 'loading' | 'loaded' | 'error'
@@ -116,7 +117,6 @@ export function EventModal({
     setDescription('');
     setDescriptionState('idle');
     setCoverFailed(false);
-    setShareState('idle');
     if (!selectedEvent?.descriptionUrl) return;
 
     const controller = new AbortController();
@@ -145,6 +145,19 @@ export function EventModal({
     return () => controller.abort();
   }, [selectedEvent]);
 
+  useEffect(() => {
+    setShareState('idle');
+    return () => {
+      shareRequestRef.current += 1;
+    };
+  }, [selectedEvent]);
+
+  useEffect(() => {
+    if (shareState !== 'copied') return;
+    const timeout = window.setTimeout(() => setShareState('idle'), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [shareState, selectedEvent]);
+
   if (!selectedEvent) return null;
 
   const event = selectedEvent;
@@ -155,15 +168,16 @@ export function EventModal({
     })} (${timeZone})`;
   const glyphToolUrl = buildGlyphToolUrl(event.galaxy, event.portalCode);
   const shareEvent = async () => {
+    const request = ++shareRequestRef.current;
     setShareState('copying');
     try {
       await navigator.clipboard.writeText(
         withEventId(window.location.href, event.id),
       );
-      setShareState('copied');
+      if (request === shareRequestRef.current) setShareState('copied');
     } catch (error: unknown) {
       console.error('Unable to copy event URL', error);
-      setShareState('error');
+      if (request === shareRequestRef.current) setShareState('error');
     }
   };
 
@@ -194,7 +208,7 @@ export function EventModal({
           </div>
           <div className="modal-header-actions">
             <span
-              className={`modal-share-status${shareState === 'error' ? ' error-note' : ''}`}
+              className={shareState === 'error' ? 'modal-share-status error-note' : 'sr-only'}
               role={shareState === 'error' ? 'alert' : 'status'}
               aria-live="polite"
             >
@@ -215,10 +229,10 @@ export function EventModal({
               <BookmarkIcon />
             </button>
             <button
-              className="button button-secondary button-icon"
+              className={`button button-secondary button-icon${shareState === 'copied' ? ' event-share-copied' : ''}`}
               type="button"
               onClick={() => void shareEvent()}
-              disabled={shareState === 'copying'}
+              disabled={shareState === 'copying' || shareState === 'copied'}
               aria-label={translations.share}
             >
               <ShareIcon />
