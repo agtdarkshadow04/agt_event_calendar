@@ -1055,6 +1055,49 @@ summary:focus-visible {
   font-size: 0.64rem;
 }
 
+.change-log-list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.85rem;
+  list-style: none;
+}
+
+.change-log-entry {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.change-log-entry h3 {
+  margin: 0 0 0.75rem;
+  color: var(--agt-orange);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+}
+
+.change-log-entry ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.change-log-entry li {
+  color: #d7d1ca;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.change-log-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 .bookmarks-list {
   padding: 0;
   display: grid;

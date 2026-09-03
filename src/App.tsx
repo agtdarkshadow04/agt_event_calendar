@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar } from './components/Calendar';
 import { BookmarksModal } from './components/BookmarksModal';
+import { ChangeLogModal } from './components/ChangeLogModal';
 import { EventModal } from './components/EventModal';
 import { FilterBar } from './components/FilterBar';
 import { BookmarkIcon, BugIcon, PlusIcon, ReloadIcon, SettingsIcon } from './components/Icons';
@@ -49,6 +50,7 @@ function App() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [settings, setSettings] = useState(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
+  const [showChangeLog, setShowChangeLog] = useState(false);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [bookmarks, setBookmarks] = useState<BookmarkState>(() => {
     try {
@@ -202,7 +204,12 @@ function App() {
   }, []);
 
   const closeSettings = useCallback(() => setShowSettings(false), []);
+  const closeChangeLog = useCallback(() => setShowChangeLog(false), []);
   const closeBookmarks = useCallback(() => setShowBookmarks(false), []);
+  const openChangeLog = useCallback(() => {
+    setShowSettings(false);
+    setShowChangeLog(true);
+  }, []);
 
   const changeBookmarks = useCallback((update: (ids: string[]) => string[]) => {
     try {
@@ -500,7 +507,15 @@ function App() {
         <SettingsModal
           settings={settings}
           onChange={setSettings}
+          onOpenChangeLog={openChangeLog}
           onClose={closeSettings}
+        />
+      )}
+
+      {showChangeLog && (
+        <ChangeLogModal
+          locale={settings.locale}
+          onClose={closeChangeLog}
         />
       )}
 

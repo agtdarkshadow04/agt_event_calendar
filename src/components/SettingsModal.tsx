@@ -13,12 +13,13 @@ import type {
   FontScale,
   Locale,
 } from '../lib/settings';
-import { SettingsIcon, XIcon } from './Icons';
+import { HistoryIcon, SettingsIcon, XIcon } from './Icons';
 import { getTranslations } from '../translations';
 
 interface SettingsModalProps {
   settings: AppSettings;
   onChange: (settings: AppSettings) => void;
+  onOpenChangeLog: () => void;
   onClose: () => void;
 }
 
@@ -34,6 +35,7 @@ function exportFileName(): string {
 export function SettingsModal({
   settings,
   onChange,
+  onOpenChangeLog,
   onClose,
 }: SettingsModalProps) {
   const translations = getTranslations(settings.locale);
@@ -169,15 +171,28 @@ export function SettingsModal({
               <h2 id="settings-dialog-title">{translations.settings}</h2>
             </div>
           </div>
-          <button
-            ref={closeButtonRef}
-            className="button button-icon settings-close"
-            type="button"
-            onClick={onClose}
-            aria-label={translations.closeSettings}
-          >
-            <XIcon />
-          </button>
+          <div className="modal-header-actions">
+            <button
+              className="button button-secondary button-icon"
+              type="button"
+              onClick={onOpenChangeLog}
+              aria-label={translations.changeLog}
+              aria-haspopup="dialog"
+              aria-controls="change-log-dialog"
+              title={translations.changeLog}
+            >
+              <HistoryIcon />
+            </button>
+            <button
+              ref={closeButtonRef}
+              className="button button-icon settings-close"
+              type="button"
+              onClick={onClose}
+              aria-label={translations.closeSettings}
+            >
+              <XIcon />
+            </button>
+          </div>
         </header>
 
         <div className="settings-scroll-region">
