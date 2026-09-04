@@ -227,7 +227,7 @@ function App() {
   }, []);
 
   const toggleBookmark = (id: string) => {
-    changeBookmarks((ids) => ids.includes(id)
+    return changeBookmarks((ids) => ids.includes(id)
       ? ids.filter((savedId) => savedId !== id)
       : [...ids, id]);
   };

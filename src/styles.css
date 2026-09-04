@@ -915,6 +915,7 @@ summary:focus-visible {
 }
 
 .event-modal {
+  position: relative;
   width: min(100%, 68rem);
   max-height: min(92vh, 58rem);
   display: flex;
@@ -1175,14 +1176,37 @@ summary:focus-visible {
   font-size: 0.62rem;
 }
 
-.modal-share-status:empty {
-  display: none;
-}
-
 .event-share-copied {
   color: var(--muted);
   border-color: var(--muted);
   animation: share-border-pulse 0.6s ease-out;
+}
+
+.modal-toast {
+  position: absolute;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 1;
+  max-width: calc(100% - 2.5rem);
+  padding: 0.6rem 0.8rem;
+  visibility: hidden;
+  color: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  background: rgba(17, 17, 17, 0.96);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.64rem;
+  pointer-events: none;
+  transform: translateY(0.35rem);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+}
+
+.modal-toast.is-visible {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .modal-close {

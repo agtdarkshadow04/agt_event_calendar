@@ -20,7 +20,7 @@ interface EventModalProps {
   timeZoneOffset: number;
   bookmarked: boolean;
   bookmarkError: string;
-  onToggleBookmark: (id: string) => void;
+  onToggleBookmark: (id: string) => boolean;
   onClose: () => void;
 }
 
@@ -73,6 +73,9 @@ export function EventModal({
   const [shareState, setShareState] = useState<
     'idle' | 'copying' | 'copied' | 'error'
   >('idle');
+  const [toast, setToast] = useState<
+    'event-url-copied' | 'bookmark-added' | 'bookmark-removed' | null
+  >(null);
 
   useEffect(() => {
     if (!selectedEvent) return;
@@ -148,6 +151,7 @@ export function EventModal({
 
   useEffect(() => {
     setShareState('idle');
+    setToast(null);
     return () => {
       shareRequestRef.current += 1;
     };
@@ -159,6 +163,12 @@ export function EventModal({
     return () => window.clearTimeout(timeout);
   }, [shareState, selectedEvent]);
 
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [toast, selectedEvent]);
+
   if (!selectedEvent) return null;
 
   const event = selectedEvent;
@@ -168,6 +178,17 @@ export function EventModal({
       timeStyle: 'medium',
     })} (${timeZone})`;
   const glyphToolUrl = buildGlyphToolUrl(event.galaxy, event.portalCode);
+  const toastMessage = toast === 'event-url-copied'
+    ? translations.eventUrlCopied
+    : toast === 'bookmark-added'
+      ? translations.bookmarkAdded
+      : toast === 'bookmark-removed'
+        ? translations.bookmarkRemoved
+        : '';
+  const toggleBookmark = () => {
+    if (!onToggleBookmark(event.id)) return;
+    setToast(bookmarked ? 'bookmark-removed' : 'bookmark-added');
+  };
   const shareEvent = async () => {
     const request = ++shareRequestRef.current;
     setShareState('copying');
@@ -175,7 +196,10 @@ export function EventModal({
       await navigator.clipboard.writeText(
         withEventId(window.location.href, event.id),
       );
-      if (request === shareRequestRef.current) setShareState('copied');
+      if (request === shareRequestRef.current) {
+        setShareState('copied');
+        setToast('event-url-copied');
+      }
     } catch (error: unknown) {
       console.error('Unable to copy event URL', error);
       if (request === shareRequestRef.current) setShareState('error');
@@ -208,21 +232,15 @@ export function EventModal({
             </p>
           </div>
           <div className="modal-header-actions">
-            <span
-              className={shareState === 'error' ? 'modal-share-status error-note' : 'sr-only'}
-              role={shareState === 'error' ? 'alert' : 'status'}
-              aria-live="polite"
-            >
-              {shareState === 'copied'
-                ? translations.eventUrlCopied
-                : shareState === 'error'
-                  ? translations.copyUrlError
-                  : ''}
-            </span>
+            {shareState === 'error' && (
+              <span className="modal-share-status error-note" role="alert">
+                {translations.copyUrlError}
+              </span>
+            )}
             <button
               className="button button-secondary button-icon event-bookmark-button"
               type="button"
-              onClick={() => onToggleBookmark(event.id)}
+              onClick={toggleBookmark}
               aria-label={bookmarked ? translations.removeBookmark : translations.bookmark}
               title={bookmarked ? translations.removeBookmark : translations.bookmark}
               aria-pressed={bookmarked}
@@ -249,6 +267,15 @@ export function EventModal({
             </button>
           </div>
         </header>
+
+        <div
+          className={`modal-toast${toast ? ' is-visible' : ''}`}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {toastMessage}
+        </div>
 
         <div className="modal-scroll-region">
           {bookmarkError && <p className="error-note" role="alert">{bookmarkError}</p>}
