@@ -1,7 +1,7 @@
 @font-face {
   font-family: 'NMS Futura';
   src: url('/NMSFuturaProBook_Kerned.ttf') format('truetype');
-  font-weight: 400 900;
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
@@ -1363,6 +1363,7 @@ summary:focus-visible {
 .markdown-body {
   color: #d7d1ca;
   font-size: 0.84rem;
+  font-synthesis: weight style;
   line-height: 1.75;
   overflow-wrap: anywhere;
 }
@@ -1400,6 +1401,24 @@ summary:focus-visible {
   padding-left: 1rem;
   color: var(--muted);
   border-left: 3px solid var(--agt-red-orange);
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line-strong);
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-body th {
+  color: #fff;
+  background: rgba(255, 5, 0, 0.08);
 }
 
 .markdown-body a,
