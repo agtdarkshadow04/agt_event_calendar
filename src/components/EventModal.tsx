@@ -63,7 +63,6 @@ export function EventModal({
 }: EventModalProps) {
   const translations = getTranslations(locale);
   const dialogRef = useRef<HTMLDivElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const shareRequestRef = useRef(0);
   const [description, setDescription] = useState('');
   const [descriptionState, setDescriptionState] = useState<
@@ -99,7 +98,10 @@ export function EventModal({
       if (focusable.length === 0) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (keyEvent.shiftKey && document.activeElement === first) {
+      if (
+        keyEvent.shiftKey
+        && (document.activeElement === first || document.activeElement === dialogRef.current)
+      ) {
         keyEvent.preventDefault();
         last.focus();
       } else if (!keyEvent.shiftKey && document.activeElement === last) {
@@ -109,7 +111,7 @@ export function EventModal({
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    requestAnimationFrame(() => closeButtonRef.current?.focus());
+    requestAnimationFrame(() => dialogRef.current?.focus());
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = previousOverflow;
@@ -220,6 +222,7 @@ export function EventModal({
         aria-labelledby="event-dialog-title"
         aria-describedby="event-dialog-summary"
         ref={dialogRef}
+        tabIndex={-1}
       >
         <header className="modal-header">
           <div>
@@ -257,7 +260,6 @@ export function EventModal({
               <ShareIcon />
             </button>
             <button
-              ref={closeButtonRef}
               className="button button-icon modal-close"
               type="button"
               onClick={onClose}

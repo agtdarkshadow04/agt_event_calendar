@@ -922,6 +922,7 @@ summary:focus-visible {
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(255, 5, 0, 0.7);
+  outline: none;
   border-radius: var(--radius-lg);
   background: var(--surface);
   box-shadow: 0 0 60px rgba(255, 5, 0, 0.18), 0 30px 80px rgba(0, 0, 0, 0.78);
