@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { BookmarkIcon, ExternalLinkIcon, ShareIcon, XIcon } from './Icons';
 import { formatAtUtcOffset } from '../lib/date';
 import {
@@ -363,6 +364,7 @@ export function EventModal({
               <div className="markdown-body">
                 <ReactMarkdown
                   skipHtml
+                  remarkPlugins={[remarkGfm]}
                   urlTransform={markdownUrlTransform}
                   components={{
                     a: ({ href, children }) => {
