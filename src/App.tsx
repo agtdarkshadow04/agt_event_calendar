@@ -296,18 +296,6 @@ function App() {
               <PlusIcon className="add-event-link-icon" />
             </a>
             <button
-              className="national-holidays-button"
-              type="button"
-              onClick={() => setShowNationalHolidays(true)}
-              aria-label={translations.nationalHolidays}
-              aria-haspopup="dialog"
-              aria-expanded={showNationalHolidays}
-              aria-controls="national-holidays-dialog"
-              title={translations.nationalHolidays}
-            >
-              <CakeIcon className="national-holidays-button-icon" />
-            </button>
-            <button
               className="bookmarks-button"
               type="button"
               onClick={() => setShowBookmarks(true)}
@@ -318,6 +306,18 @@ function App() {
               title={translations.bookmarks}
             >
               <BookmarkIcon className="bookmarks-button-icon" />
+            </button>
+            <button
+              className="national-holidays-button"
+              type="button"
+              onClick={() => setShowNationalHolidays(true)}
+              aria-label={translations.nationalHolidays}
+              aria-haspopup="dialog"
+              aria-expanded={showNationalHolidays}
+              aria-controls="national-holidays-dialog"
+              title={translations.nationalHolidays}
+            >
+              <CakeIcon className="national-holidays-button-icon" />
             </button>
             <a
               className="bug-link"
