@@ -17,6 +17,11 @@ const COMMON_TRANSLATIONS = {
   brandName: 'Alliance of Galactic Travellers',
   productName: 'AGT Event Calendar',
   agtNavi: 'AGT NAVI',
+  nationalHolidays: 'AGT National Holidays',
+  closeNationalHolidays: 'Close AGT National Holidays',
+  loadingNationalHolidays: 'Loading AGT National Holidays…',
+  nationalHolidaysLoadError: 'AGT National Holidays could not be loaded.',
+  noNationalHolidays: 'No AGT National Holidays are available.',
 } as const;
 
 const english = {

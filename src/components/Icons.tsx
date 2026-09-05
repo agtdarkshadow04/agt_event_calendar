@@ -102,6 +102,21 @@ export function BookmarkIcon({ className }: Omit<IconProps, 'children'>) {
   );
 }
 
+export function CakeIcon({ className }: Omit<IconProps, 'children'>) {
+  return (
+    <Icon className={className}>
+      <path d="M4 11h16v10H4z" />
+      <path d="M4 15c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2" />
+      <path d="M8 7v4" />
+      <path d="M12 7v4" />
+      <path d="M16 7v4" />
+      <path d="M8 4v.01" />
+      <path d="M12 4v.01" />
+      <path d="M16 4v.01" />
+    </Icon>
+  );
+}
+
 export function ShareIcon({ className }: Omit<IconProps, 'children'>) {
   return (
     <Icon className={className}>

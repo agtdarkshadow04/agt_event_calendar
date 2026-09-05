@@ -4,7 +4,14 @@ import { BookmarksModal } from './components/BookmarksModal';
 import { ChangeLogModal } from './components/ChangeLogModal';
 import { EventModal } from './components/EventModal';
 import { FilterBar } from './components/FilterBar';
-import { BookmarkIcon, BugIcon, PlusIcon, SettingsIcon } from './components/Icons';
+import {
+  BookmarkIcon,
+  BugIcon,
+  CakeIcon,
+  PlusIcon,
+  SettingsIcon,
+} from './components/Icons';
+import { NationalHolidaysModal } from './components/NationalHolidaysModal';
 import { SettingsModal } from './components/SettingsModal';
 import { BUG_REPORT_URL, EVENT_DATABASE_URL, EVENT_FORM_URL } from './config';
 import { parseEventsCsv } from './lib/csv';
@@ -51,6 +58,7 @@ function App() {
   const [settings, setSettings] = useState(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
   const [showChangeLog, setShowChangeLog] = useState(false);
+  const [showNationalHolidays, setShowNationalHolidays] = useState(false);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [bookmarks, setBookmarks] = useState<BookmarkState>(() => {
     try {
@@ -205,6 +213,10 @@ function App() {
 
   const closeSettings = useCallback(() => setShowSettings(false), []);
   const closeChangeLog = useCallback(() => setShowChangeLog(false), []);
+  const closeNationalHolidays = useCallback(
+    () => setShowNationalHolidays(false),
+    [],
+  );
   const closeBookmarks = useCallback(() => setShowBookmarks(false), []);
   const openChangeLog = useCallback(() => {
     setShowSettings(false);
@@ -283,6 +295,18 @@ function App() {
             >
               <PlusIcon className="add-event-link-icon" />
             </a>
+            <button
+              className="national-holidays-button"
+              type="button"
+              onClick={() => setShowNationalHolidays(true)}
+              aria-label={translations.nationalHolidays}
+              aria-haspopup="dialog"
+              aria-expanded={showNationalHolidays}
+              aria-controls="national-holidays-dialog"
+              title={translations.nationalHolidays}
+            >
+              <CakeIcon className="national-holidays-button-icon" />
+            </button>
             <button
               className="bookmarks-button"
               type="button"
@@ -526,6 +550,13 @@ function App() {
           onChange={changeBookmarks}
           onSelectEvent={selectBookmarkedEvent}
           onClose={closeBookmarks}
+        />
+      )}
+
+      {showNationalHolidays && (
+        <NationalHolidaysModal
+          locale={settings.locale}
+          onClose={closeNationalHolidays}
         />
       )}
 

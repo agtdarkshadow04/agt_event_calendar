@@ -280,6 +280,7 @@ summary:focus-visible {
 }
 
 .settings-button,
+.national-holidays-button,
 .bookmarks-button {
   padding: 0;
   display: inline-flex;
@@ -301,11 +302,13 @@ summary:focus-visible {
 
 .add-event-link:hover .add-event-link-icon,
 .bug-link:hover .bug-link-icon,
+.national-holidays-button:hover .national-holidays-button-icon,
 .bookmarks-button:hover .bookmarks-button-icon {
   transform: rotate(360deg) scale(1.15);
 }
 
 .bug-link:active .bug-link-icon,
+.national-holidays-button:active .national-holidays-button-icon,
 .bookmarks-button:active .bookmarks-button-icon {
   transform: rotate(720deg) scale(0.9);
 }
@@ -319,6 +322,7 @@ summary:focus-visible {
 
 .add-event-link-icon,
 .bug-link-icon,
+.national-holidays-button-icon,
 .bookmarks-button-icon {
   width: 1.25rem;
   height: 1.25rem;
@@ -1100,6 +1104,68 @@ summary:focus-visible {
   gap: 1rem;
 }
 
+.holidays-list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+  gap: 0.85rem;
+  list-style: none;
+}
+
+.holiday-entry {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.holiday-date {
+  color: var(--agt-orange);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.holiday-entry h3 {
+  margin: 0.55rem 0 0.85rem;
+  color: #fff;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.holiday-details {
+  margin: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.holiday-details div {
+  display: grid;
+  grid-template-columns: minmax(5rem, auto) 1fr;
+  gap: 0.75rem;
+}
+
+.holiday-details dt {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.holiday-details dd {
+  min-width: 0;
+  margin: 0;
+  color: #d7d1ca;
+  font-size: 0.72rem;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 .bookmarks-list {
   padding: 0;
   display: grid;
@@ -1564,6 +1630,7 @@ summary:focus-visible {
   }
 
   .settings-button-icon,
+  .national-holidays-button-icon,
   .bookmarks-button-icon {
     width: 1.2rem;
     height: 1.2rem;
