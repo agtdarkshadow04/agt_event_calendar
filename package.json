@@ -4,27 +4,49 @@
   "version": "1.0.0",
   "type": "module",
   "engines": {
-    "node": ">=18.18.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev:server": "npm run build:server && node dist-server/index.mjs",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "tsc -b && vite build",
+    "build:server": "esbuild server/index.ts --bundle --platform=node --target=node24 --format=esm --packages=external --loader:.sql=text --outfile=dist-server/index.mjs",
+    "start": "node dist-server/index.mjs",
     "lint": "tsc -b --pretty false",
     "check": "npm run lint && npm test && npm run build",
-    "test": "esbuild src/lib/*.test.ts --bundle --platform=node --format=esm --outdir=.test-build --out-extension:.js=.mjs && node --test .test-build/*.test.mjs"
+    "test": "npm run test:client && npm run test:server",
+    "test:client": "esbuild src/lib/*.test.ts --bundle --platform=node --format=esm --outdir=.test-build/client --out-extension:.js=.mjs && node --test .test-build/client/*.test.mjs",
+    "test:server": "esbuild server/test/*.test.ts --bundle --platform=node --target=node22 --format=esm --packages=external --loader:.sql=text --outdir=.test-build/server --out-extension:.js=.mjs && node --test --test-concurrency=1 .test-build/server/*.test.mjs"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/multipart": "^10.1.8",
+    "@fastify/rate-limit": "^11.2.2",
+    "@fastify/static": "^10.1.10",
+    "@fastify/type-provider-typebox": "^6.3.0",
+    "@sinclair/typebox": "^0.34.52",
+    "altcha": "^3.5.0",
+    "altcha-lib": "^2.8.0",
+    "better-sqlite3": "^13.0.3",
+    "fastify": "^5.12.8",
     "papaparse": "^5.5.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.0.1",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "yaml": "^2.9.1",
+    "yauzl": "^3.4.0",
+    "yazl": "^3.3.1"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^24.19.2",
     "@types/papaparse": "^5.3.16",
-    "@types/node": "^22.14.0",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
+    "@types/yauzl": "^3.4.0",
+    "@types/yazl": "^3.3.1",
     "@vitejs/plugin-react": "^4.4.1",
     "esbuild": "^0.25.2",
     "typescript": "~5.8.2",

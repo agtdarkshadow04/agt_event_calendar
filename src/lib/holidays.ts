@@ -1,4 +1,6 @@
-import Papa from 'papaparse';
+import { validateHolidayInput } from './validation';
+import type { HolidayInput } from './validation';
+import type { CsvTable, LegacyRowError } from './csv';
 
 export const HOLIDAY_FIELDS = [
   'HOLIDAY_NAME',
@@ -7,74 +9,39 @@ export const HOLIDAY_FIELDS = [
   'HOLIDAY_TYPE',
 ] as const;
 
-type HolidayField = (typeof HOLIDAY_FIELDS)[number];
-type HolidayRecord = Record<HolidayField, string>;
-
 export interface NationalHoliday {
+  id: string;
   name: string;
   civilization: string;
-  date: Date;
+  /** First occurrence, `YYYY-MM-DD`. */
+  date: string;
   type: string;
 }
 
-function parseDate(value: string): Date | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return !Number.isNaN(date.getTime()) &&
-    date.toISOString().slice(0, 10) === value
-    ? date
-    : null;
+/** Orders holidays by month and day, ignoring the year of first occurrence. */
+export function sortHolidays<T extends { date: string }>(holidays: T[]): T[] {
+  return [...holidays].sort((a, b) => a.date.slice(5).localeCompare(b.date.slice(5)));
 }
 
-function normalizeRecord(record: Record<string, unknown>): HolidayRecord {
-  return Object.fromEntries(
-    HOLIDAY_FIELDS.map((field) => [field, String(record[field] ?? '').trim()]),
-  ) as HolidayRecord;
-}
-
-export function parseNationalHolidaysCsv(csv: string): NationalHoliday[] {
-  const parsed = Papa.parse<Record<string, unknown>>(csv, {
-    header: true,
-    skipEmptyLines: 'greedy',
-    transformHeader: (header) => header.replace(/^\uFEFF/, '').trim(),
-  });
-
-  const parserError = parsed.errors[0];
-  if (parserError) throw new Error(parserError.message);
-
-  const presentFields = new Set(parsed.meta.fields ?? []);
-  const missingHeaders = HOLIDAY_FIELDS.filter(
-    (field) => !presentFields.has(field),
-  );
-  if (missingHeaders.length > 0) {
-    throw new Error(`Missing required CSV headers: ${missingHeaders.join(', ')}`);
-  }
-
-  const holidays = parsed.data.map((rawRecord, index) => {
-    const row = index + 2;
-    const record = normalizeRecord(rawRecord);
-    const missingFields = HOLIDAY_FIELDS.filter((field) => !record[field]);
-    if (missingFields.length > 0) {
-      throw new Error(`Row ${row}: ${missingFields.join(', ')} is required`);
-    }
-
-    const date = parseDate(record.HOLIDAY_DATE);
-    if (!date) {
-      throw new Error(`Row ${row}: HOLIDAY_DATE must use a valid YYYY-MM-DD date`);
-    }
-
-    return {
+/** Validates the rows of a legacy `publishedHolidayDB` CSV export. */
+export function parseLegacyHolidays(table: CsvTable): {
+  holidays: { row: number; input: HolidayInput }[];
+  errors: LegacyRowError[];
+} {
+  const holidays: { row: number; input: HolidayInput }[] = [];
+  const errors: LegacyRowError[] = table.errors.map((error) => ({
+    row: error.row,
+    messages: [`CSV parser: ${error.message}`],
+  }));
+  for (const { row, record } of table.rows) {
+    const result = validateHolidayInput({
       name: record.HOLIDAY_NAME,
       civilization: record.HOLIDAY_CIV,
-      date,
+      date: record.HOLIDAY_DATE,
       type: record.HOLIDAY_TYPE,
-    };
-  });
-
-  holidays.sort(
-    (a, b) =>
-      a.date.getUTCMonth() - b.date.getUTCMonth() ||
-      a.date.getUTCDate() - b.date.getUTCDate(),
-  );
-  return holidays;
+    });
+    if (result.ok) holidays.push({ row, input: result.value });
+    else errors.push({ row, messages: result.errors.map((error) => error.message) });
+  }
+  return { holidays, errors };
 }

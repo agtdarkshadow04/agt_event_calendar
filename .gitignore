@@ -5,3 +5,9 @@ dist/
 *.log
 coverage/
 .test-build/
+
+# Self-hosting
+.env
+config.yaml
+data/
+dist-server/

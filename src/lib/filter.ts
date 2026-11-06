@@ -33,6 +33,7 @@ export function filterEvents(
       query &&
       ![
         event.id,
+        event.legacyId,
         event.name,
         event.type,
         event.civilization,

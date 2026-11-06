@@ -1,11 +1,15 @@
 export interface CalendarEvent {
+  /** RFC 9562 UUIDv4. */
   id: string;
+  /** Amplify-era 4-hex ID, kept only to resolve old bookmarks and links. */
+  legacyId: string | null;
   name: string;
   start: Date;
   end: Date | null;
   civilization: string | null;
   type: string;
-  descriptionUrl: string | null;
+  /** Markdown, rendered without raw HTML. */
+  description: string | null;
   coverImageUrl: string | null;
   links: string[];
   galaxy: string;
@@ -13,17 +17,6 @@ export interface CalendarEvent {
   system: string;
   planet: string | null;
   portalCode: string;
-}
-
-export interface DataWarning {
-  row: number;
-  messages: string[];
-  skipped: boolean;
-}
-
-export interface ParseEventsResult {
-  events: CalendarEvent[];
-  warnings: DataWarning[];
 }
 
 export interface EventFilters {

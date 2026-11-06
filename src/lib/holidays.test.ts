@@ -1,62 +1,45 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { HOLIDAY_FIELDS, parseNationalHolidaysCsv } from './holidays';
+import { parseCsvTable } from './csv';
+import { HOLIDAY_FIELDS, parseLegacyHolidays, sortHolidays } from './holidays';
 
 const header = HOLIDAY_FIELDS.join(',');
 
-describe('parseNationalHolidaysCsv', () => {
-  it('parses required fields and orders holidays by month and day', () => {
+describe('parseLegacyHolidays', () => {
+  it('parses required fields', () => {
     const csv = [
-      `\uFEFF${header}`,
+      `﻿${header}`,
       'Founding Day,AGT,2018-12-05,Anniversary',
-      'First Contact,AGT,2024-01-04,Commemoration',
       'Unity Day,"Travellers, United",1999-01-20,Cultural',
-      'Exploration Day,AGT,1987-06-12,Observance',
+    ].join('\r\n');
+    const { holidays, errors } = parseLegacyHolidays(parseCsvTable(csv));
+    assert.deepEqual(errors, []);
+    assert.deepEqual(holidays[1], {
+      row: 3,
+      input: { name: 'Unity Day', civilization: 'Travellers, United', date: '1999-01-20', type: 'Cultural' },
+    });
+  });
+
+  it('reports missing values and invalid calendar dates per row', () => {
+    const csv = [
+      header,
+      'Founding Day,,2018-12-05,Anniversary',
+      'Leap Day,AGT,2025-02-29,Anniversary',
+      'Good Day,AGT,2024-02-29,Anniversary',
     ].join('\n');
+    const { holidays, errors } = parseLegacyHolidays(parseCsvTable(csv));
+    assert.equal(holidays.length, 1);
+    assert.deepEqual(errors.map((error) => error.row), [2, 3]);
+    assert.match(errors[0].messages[0], /HOLIDAY_CIV is required/);
+    assert.match(errors[1].messages[0], /YYYY-MM-DD/);
+  });
+});
 
-    const holidays = parseNationalHolidaysCsv(csv);
-
-    assert.deepEqual(holidays.map((holiday) => holiday.name), [
-      'First Contact',
-      'Unity Day',
-      'Exploration Day',
-      'Founding Day',
+describe('sortHolidays', () => {
+  it('orders holidays by month and day', () => {
+    const sorted = sortHolidays([
+      { date: '2018-12-05' }, { date: '2024-01-04' }, { date: '1999-01-20' }, { date: '1987-06-12' },
     ]);
-    assert.equal(holidays[1].civilization, 'Travellers, United');
-    assert.equal(holidays[1].date.toISOString(), '1999-01-20T00:00:00.000Z');
-    assert.equal(holidays[1].type, 'Cultural');
-  });
-
-  it('returns no holidays for a header-only CSV', () => {
-    assert.deepEqual(parseNationalHolidaysCsv(header), []);
-  });
-
-  it('rejects missing headers and required values', () => {
-    assert.throws(
-      () => parseNationalHolidaysCsv(
-        'HOLIDAY_NAME,HOLIDAY_DATE\nFounding Day,2018-12-05',
-      ),
-      /HOLIDAY_CIV, HOLIDAY_TYPE/,
-    );
-    assert.throws(
-      () => parseNationalHolidaysCsv(
-        `${header}\nFounding Day,,2018-12-05,Anniversary`,
-      ),
-      /Row 2: HOLIDAY_CIV is required/,
-    );
-  });
-
-  it('rejects invalid calendar dates and malformed CSV', () => {
-    assert.throws(
-      () => parseNationalHolidaysCsv(
-        `${header}\nFounding Day,AGT,2025-02-29,Anniversary`,
-      ),
-      /HOLIDAY_DATE must use a valid YYYY-MM-DD date/,
-    );
-    assert.throws(
-      () => parseNationalHolidaysCsv(
-        `${header}\n"Founding Day,AGT,2018-12-05,Anniversary`,
-      ),
-    );
+    assert.deepEqual(sorted.map((holiday) => holiday.date), ['2024-01-04', '1999-01-20', '1987-06-12', '2018-12-05']);
   });
 });

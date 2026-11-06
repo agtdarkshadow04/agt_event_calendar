@@ -25,8 +25,8 @@ describe('interface translations', () => {
   it('falls back to English and interpolates dynamic values', () => {
     assert.equal(getTranslations('unsupported'), TRANSLATIONS.en);
     assert.equal(
-      formatTranslation(TRANSLATIONS.fr.rowLabel, { row: 12 }),
-      'Ligne 12 :',
+      formatTranslation(TRANSLATIONS.fr.utcPreview, { value: '12:00' }),
+      'UTC : 12:00',
     );
   });
 });

@@ -1,7 +1,13 @@
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
 
-export function buildGlyphToolUrl(galaxy: string, portalCode: string): string {
-  const url = new URL('https://glyph.nms-agt.com/');
+export const DEFAULT_GLYPH_TOOL_URL = 'https://glyph.nms-agt.com/';
+
+export function buildGlyphToolUrl(
+  galaxy: string,
+  portalCode: string,
+  baseUrl: string = DEFAULT_GLYPH_TOOL_URL,
+): string {
+  const url = new URL(baseUrl);
   url.searchParams.set('embed', 'false');
   url.searchParams.set('galaxy', galaxy);
   url.searchParams.set('glyphs', portalCode);
@@ -34,10 +40,3 @@ export function withEventId(value: string, eventId: string | null): string {
   }
   return url.href;
 }
-
-export function withCacheBuster(value: string): string {
-  const url = new URL(value, window.location.origin);
-  url.searchParams.set('_agt_refresh', String(Date.now()));
-  return url.href;
-}
-
