@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "tsc -b --pretty false",
+    "check": "npm run lint && npm test && npm run build",
     "test": "esbuild src/lib/*.test.ts --bundle --platform=node --format=esm --outdir=.test-build --out-extension:.js=.mjs && node --test .test-build/*.test.mjs"
   },
   "dependencies": {
