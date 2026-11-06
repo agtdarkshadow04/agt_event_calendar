@@ -139,7 +139,7 @@ describe('uploaded image checks', () => {
       assert.equal(response.statusCode, 415, `${file.fileName}: ${response.body}`);
     }
     assert.throws(() => validateImage(Buffer.alloc(11 * 1024 * 1024, 0xff), { maxBytes: 50 * 1024 * 1024 }), /10 MB/);
-    assert.equal(test.context.db.prepare('SELECT count(*) AS n FROM events').get().n, 0);
+    assert.equal((test.context.db.prepare('SELECT count(*) AS n FROM events').get() as { n: number }).n, 0);
   });
 
   it('enforces the size limit while streaming the upload', async () => {

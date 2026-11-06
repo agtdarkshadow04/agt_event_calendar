@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { NATIONAL_HOLIDAYS_URL } from '../config';
-import { parseNationalHolidaysCsv } from '../lib/holidays';
+import type { ApiHoliday } from '../lib/api';
+import { apiRequest, isAbortError } from '../lib/client';
+import { sortHolidays } from '../lib/holidays';
 import type { NationalHoliday } from '../lib/holidays';
-import { withCacheBuster } from '../lib/urls';
 import { getTranslations } from '../translations';
 import { CakeIcon, XIcon } from './Icons';
 
@@ -73,23 +73,13 @@ export function NationalHolidaysModal({
     const controller = new AbortController();
     setLoadState('loading');
 
-    fetch(withCacheBuster(NATIONAL_HOLIDAYS_URL), {
-      cache: 'no-store',
-      signal: controller.signal,
-      headers: { Accept: 'text/csv, text/plain;q=0.9' },
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`National holidays request failed (${response.status})`);
-        }
-        return response.text();
-      })
-      .then((csv) => {
-        setHolidays(parseNationalHolidaysCsv(csv));
+    apiRequest<ApiHoliday[]>('/api/holidays', { signal: controller.signal })
+      .then((data) => {
+        setHolidays(sortHolidays(data));
         setLoadState('loaded');
       })
       .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
+        if (isAbortError(error)) return;
         console.error('Unable to load AGT national holidays', error);
         setLoadState('error');
       });
@@ -155,16 +145,16 @@ export function NationalHolidaysModal({
           )}
           {loadState === 'loaded' && holidays.length > 0 && (
             <ol className="holidays-list">
-              {holidays.map((holiday, index) => (
+              {holidays.map((holiday) => (
                 <li
                   className="holiday-entry"
-                  key={`${holiday.date.toISOString()}-${holiday.name}-${index}`}
+                  key={holiday.id}
                 >
                   <time
                     className="holiday-date"
-                    dateTime={holiday.date.toISOString().slice(0, 10)}
+                    dateTime={holiday.date}
                   >
-                    {dateFormatter.format(holiday.date)}
+                    {dateFormatter.format(new Date(`${holiday.date}T00:00:00Z`))}
                   </time>
                   <h3>{holiday.name}</h3>
                   <dl className="holiday-details">

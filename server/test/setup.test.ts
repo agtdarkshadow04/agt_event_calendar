@@ -55,7 +55,7 @@ describe('first-run setup with AGT_SETUP_PASSWORD', () => {
       payload: { setupPassword: SETUP_PASSWORD, username: 'other', password: 'another long password' },
     });
     assert.equal(again.statusCode, 410);
-    assert.equal(test.context.db.prepare('SELECT count(*) AS n FROM admin').get().n, 1);
+    assert.equal((test.context.db.prepare('SELECT count(*) AS n FROM admin').get() as { n: number }).n, 1);
 
     const session = await test.app.inject({ method: 'GET', url: '/api/admin/session', headers: { cookie } });
     assert.equal(session.statusCode, 200);

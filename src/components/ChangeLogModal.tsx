@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { CHANGE_LOG_URL } from '../config';
-import { parseChangeLogCsv } from '../lib/changelog';
-import type { ChangeLogEntry } from '../lib/changelog';
-import { withCacheBuster } from '../lib/urls';
+import type { ApiChangeLogEntry } from '../lib/api';
+import { apiRequest, isAbortError } from '../lib/client';
+import { splitChanges } from '../lib/validation';
 import { getTranslations } from '../translations';
 import { HistoryIcon, XIcon } from './Icons';
 
@@ -17,7 +16,7 @@ export function ChangeLogModal({ locale, onClose }: ChangeLogModalProps) {
   const translations = getTranslations(locale);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const [entries, setEntries] = useState<ChangeLogEntry[]>([]);
+  const [entries, setEntries] = useState<{ date: string; changes: string[] }[]>([]);
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [requestVersion, setRequestVersion] = useState(0);
 
@@ -63,23 +62,13 @@ export function ChangeLogModal({ locale, onClose }: ChangeLogModalProps) {
     const controller = new AbortController();
     setLoadState('loading');
 
-    fetch(withCacheBuster(CHANGE_LOG_URL), {
-      cache: 'no-store',
-      signal: controller.signal,
-      headers: { Accept: 'text/csv, text/plain;q=0.9' },
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Change log request failed (${response.status})`);
-        }
-        return response.text();
-      })
-      .then((csv) => {
-        setEntries(parseChangeLogCsv(csv));
+    apiRequest<ApiChangeLogEntry[]>('/api/changelog', { signal: controller.signal })
+      .then((data) => {
+        setEntries(data.map((entry) => ({ date: entry.date, changes: splitChanges(entry.changes) })));
         setLoadState('loaded');
       })
       .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
+        if (isAbortError(error)) return;
         console.error('Unable to load change log', error);
         setLoadState('error');
       });

@@ -107,7 +107,7 @@ describe('backup restore', () => {
     const preview = await test.restore(backup, 'preview');
     assert.equal(preview.statusCode, 200, preview.body);
     assert.equal(preview.json().counts.events, 1);
-    assert.equal(test.context.db.prepare('SELECT count(*) AS n FROM events').get().n, 2, 'preview changes nothing');
+    assert.equal((test.context.db.prepare('SELECT count(*) AS n FROM events').get() as { n: number }).n, 2, 'preview changes nothing');
 
     const response = await test.restore(backup, 'restore');
     assert.equal(response.statusCode, 200, response.body);
@@ -161,7 +161,7 @@ describe('backup restore', () => {
       const response = await test.restore(zip, 'restore');
       assert.equal(response.statusCode, 422, response.body);
       assert.match(response.json().message, pattern);
-      assert.equal(test.context.db.prepare('SELECT count(*) AS n FROM events').get().n, 1);
+      assert.equal((test.context.db.prepare('SELECT count(*) AS n FROM events').get() as { n: number }).n, 1);
     };
 
     const tampered = new Map(files);

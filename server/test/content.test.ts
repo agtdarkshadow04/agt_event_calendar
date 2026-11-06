@@ -128,7 +128,7 @@ describe('settings precedence', () => {
     });
     assert.equal(response.statusCode, 409);
     assert.equal(response.json().message, 'submissions.enabled is defined in the configuration file and cannot be changed from the dashboard.');
-    assert.equal(context.db.prepare('SELECT count(*) AS n FROM settings').get().n, 0, 'nothing is written when one key is locked');
+    assert.equal((context.db.prepare('SELECT count(*) AS n FROM settings').get() as { n: number }).n, 0, 'nothing is written when one key is locked');
 
     context.db.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('site.title', '\"From DB\"', 'now')").run();
     assert.equal((await app.inject({ method: 'GET', url: '/api/settings/public' })).json().siteTitle, 'From Config');

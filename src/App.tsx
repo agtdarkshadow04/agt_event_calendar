@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar } from './components/Calendar';
 import { BookmarksModal } from './components/BookmarksModal';
 import { ChangeLogModal } from './components/ChangeLogModal';
@@ -13,9 +13,10 @@ import {
 } from './components/Icons';
 import { NationalHolidaysModal } from './components/NationalHolidaysModal';
 import { SettingsModal } from './components/SettingsModal';
-import { BUG_REPORT_URL, EVENT_DATABASE_URL, EVENT_FORM_URL } from './config';
-import { parseEventsCsv } from './lib/csv';
-import { loadBookmarks, saveBookmarks } from './lib/bookmarks';
+import { findEventByAnyId, toCalendarEvent } from './lib/api';
+import type { ApiEvent, PublicSettings } from './lib/api';
+import { loadBookmarks, migrateLegacyBookmarks, saveBookmarks } from './lib/bookmarks';
+import { ApiError, apiRequest } from './lib/client';
 import { formatAtUtcOffset } from './lib/date';
 import { filterEvents } from './lib/filter';
 import {
@@ -23,13 +24,19 @@ import {
   resolveTimeZone,
   saveSettings,
 } from './lib/settings';
-import { withCacheBuster, withEventId } from './lib/urls';
+import { DEFAULT_GLYPH_TOOL_URL, withEventId } from './lib/urls';
 import { formatTranslation, getTranslations } from './translations';
-import type {
-  CalendarEvent,
-  DataWarning,
-  EventFilters,
-} from './types';
+import type { CalendarEvent, EventFilters } from './types';
+
+const SubmitEventModal = lazy(() => import('./components/SubmitEventModal'));
+
+const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
+  siteTitle: '',
+  supportUrl: 'https://www.nms-agt.com/support',
+  glyphToolUrl: DEFAULT_GLYPH_TOOL_URL,
+  submissionsEnabled: false,
+  maxImageBytes: 10 * 1024 * 1024,
+};
 
 const INITIAL_FILTERS: EventFilters = {
   search: '',
@@ -48,7 +55,8 @@ interface BookmarkState {
 
 function App() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [warnings, setWarnings] = useState<DataWarning[]>([]);
+  const [publicSettings, setPublicSettings] = useState<PublicSettings>(DEFAULT_PUBLIC_SETTINGS);
+  const [showSubmitEvent, setShowSubmitEvent] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [loadErrorStatus, setLoadErrorStatus] = useState<number | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
@@ -70,9 +78,6 @@ function App() {
   });
   const bookmarksRef = useRef(bookmarks);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const csvRef = useRef<string | null>(null);
-  const localeRef = useRef(settings.locale);
-  localeRef.current = settings.locale;
   const translations = getTranslations(settings.locale);
   const bookmarkError = bookmarks.error === 'load'
     ? translations.bookmarksLoadError
@@ -88,27 +93,31 @@ function App() {
     setLoadState('loading');
     setLoadErrorStatus(null);
 
-    let responseStatus: number | null = null;
     try {
-      const response = await fetch(withCacheBuster(EVENT_DATABASE_URL), {
-        cache: 'no-store',
-        headers: { Accept: 'text/csv, text/plain;q=0.9' },
-      });
-      if (!response.ok) {
-        responseStatus = response.status;
-        throw new Error(`Event database HTTP ${response.status}`);
-      }
-
-      const csv = await response.text();
-      csvRef.current = csv;
-      const parsed = parseEventsCsv(csv, localeRef.current);
-      setEvents(parsed.events);
-      setWarnings(parsed.warnings);
+      const [data, siteSettings] = await Promise.all([
+        apiRequest<ApiEvent[]>('/api/events'),
+        apiRequest<PublicSettings>('/api/settings/public'),
+      ]);
+      const loaded = data.map(toCalendarEvent).sort((a, b) => a.start.getTime() - b.start.getTime());
+      setEvents(loaded);
+      setPublicSettings(siteSettings);
       setUpdatedAt(new Date());
       setLoadState('success');
+
+      // Legacy 4-hex bookmark IDs are rewritten to UUIDs once, after events load.
+      const migrated = migrateLegacyBookmarks(bookmarksRef.current.ids, loaded);
+      if (migrated.changed) {
+        try {
+          saveBookmarks(migrated.ids);
+          bookmarksRef.current = { ids: migrated.ids, error: null };
+          setBookmarks(bookmarksRef.current);
+        } catch (error: unknown) {
+          console.error('Unable to migrate legacy bookmarks', error);
+        }
+      }
     } catch (error: unknown) {
       console.error('Unable to load AGT event database', error);
-      setLoadErrorStatus(responseStatus);
+      setLoadErrorStatus(error instanceof ApiError ? error.status : null);
       setLoadState('error');
     }
   }, []);
@@ -132,20 +141,13 @@ function App() {
     const previousTitle = document.title;
     root.style.fontSize = `${Number.parseFloat(settings.fontScale) * 100}%`;
     root.lang = settings.locale;
-    document.title = translations.productName;
+    document.title = publicSettings.siteTitle || translations.productName;
     return () => {
       root.style.fontSize = previousFontSize;
       root.lang = previousLanguage;
       document.title = previousTitle;
     };
-  }, [settings.fontScale, settings.locale, translations.productName]);
-
-  useEffect(() => {
-    if (!csvRef.current) return;
-    const parsed = parseEventsCsv(csvRef.current, settings.locale);
-    setEvents(parsed.events);
-    setWarnings(parsed.warnings);
-  }, [settings.locale]);
+  }, [settings.fontScale, settings.locale, translations.productName, publicSettings.siteTitle]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -177,9 +179,16 @@ function App() {
   useEffect(() => {
     const selectEventFromUrl = () => {
       const eventId = new URL(window.location.href).searchParams.get('event_id');
-      setSelectedEvent(
-        eventId ? events.find((event) => event.id === eventId) ?? null : null,
-      );
+      const event = eventId ? findEventByAnyId(events, eventId) : null;
+      setSelectedEvent(event);
+      // Old ?event_id=<4-hex> links are rewritten to the event's UUID.
+      if (event && eventId !== event.id) {
+        window.history.replaceState(
+          window.history.state,
+          '',
+          withEventId(window.location.href, event.id),
+        );
+      }
     };
 
     selectEventFromUrl();
@@ -191,7 +200,6 @@ function App() {
     () => filterEvents(events, filters, new Date(), timeZoneOffset),
     [events, filters, timeZoneOffset],
   );
-  const skippedRows = warnings.filter((warning) => warning.skipped).length;
 
   const selectEvent = useCallback((event: CalendarEvent) => {
     setSelectedEvent(event);
@@ -218,6 +226,7 @@ function App() {
     [],
   );
   const closeBookmarks = useCallback(() => setShowBookmarks(false), []);
+  const closeSubmitEvent = useCallback(() => setShowSubmitEvent(false), []);
   const openChangeLog = useCallback(() => {
     setShowSettings(false);
     setShowChangeLog(true);
@@ -285,16 +294,23 @@ function App() {
                     : translations.databaseLive}
               </span>
             </div>
-            <a
-              className="add-event-link"
-              href={EVENT_FORM_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={translations.addEvent}
-              title={translations.addEvent}
+            <button
+              className={`add-event-link${publicSettings.submissionsEnabled ? '' : ' is-closed'}`}
+              type="button"
+              onClick={() => setShowSubmitEvent(true)}
+              aria-label={publicSettings.submissionsEnabled
+                ? translations.addEvent
+                : `${translations.addEvent} — ${translations.submissionsClosed}`}
+              aria-haspopup="dialog"
+              aria-expanded={showSubmitEvent}
+              aria-disabled={!publicSettings.submissionsEnabled}
+              title={publicSettings.submissionsEnabled
+                ? translations.addEvent
+                : translations.submissionsClosed}
+              hidden={loadState !== 'success'}
             >
               <PlusIcon className="add-event-link-icon" />
-            </a>
+            </button>
             <button
               className="bookmarks-button"
               type="button"
@@ -321,7 +337,7 @@ function App() {
             </button>
             <a
               className="bug-link"
-              href={BUG_REPORT_URL}
+              href={publicSettings.supportUrl}
               target="_blank"
               rel="noopener noreferrer"
               aria-label={translations.contactSupport}
@@ -417,42 +433,6 @@ function App() {
                 </time>
               </div>
             </section>
-
-            {warnings.length > 0 && (
-              <details className="warning-panel">
-                <summary>
-                  <span aria-hidden="true">!</span>
-                  {formatTranslation(translations.databaseLoadedWith, {
-                    count: warnings.length,
-                    warningLabel:
-                      warnings.length === 1
-                        ? translations.warning
-                        : translations.warnings,
-                    skipped:
-                      skippedRows > 0
-                        ? formatTranslation(translations.malformedRowsSkipped, {
-                            count: skippedRows,
-                          })
-                        : '',
-                  })}
-                </summary>
-                <div className="warning-details">
-                  <p>{translations.validEventsRemain}</p>
-                  <ul>
-                    {warnings.map((warning, index) => (
-                      <li key={`${warning.row}-${index}`}>
-                        <strong>
-                          {formatTranslation(translations.rowLabel, {
-                            row: warning.row,
-                          })}
-                        </strong>{' '}
-                        {warning.messages.join('; ')}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </details>
-            )}
 
             <FilterBar
               events={events}
@@ -553,6 +533,19 @@ function App() {
         />
       )}
 
+      {showSubmitEvent && (
+        <Suspense fallback={null}>
+          <SubmitEventModal
+            locale={settings.locale}
+            timeZone={timeZone}
+            timeZoneOffset={timeZoneOffset}
+            submissionsEnabled={publicSettings.submissionsEnabled}
+            maxImageBytes={publicSettings.maxImageBytes}
+            onClose={closeSubmitEvent}
+          />
+        </Suspense>
+      )}
+
       {showNationalHolidays && (
         <NationalHolidaysModal
           locale={settings.locale}
@@ -565,6 +558,7 @@ function App() {
         locale={settings.locale}
         timeZone={timeZone}
         timeZoneOffset={timeZoneOffset}
+        glyphToolUrl={publicSettings.glyphToolUrl}
         bookmarked={selectedEvent !== null && bookmarks.ids.includes(selectedEvent.id)}
         bookmarkError={bookmarkError}
         onToggleBookmark={toggleBookmark}

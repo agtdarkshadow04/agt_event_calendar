@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { parseBookmarksCsv, resolveBookmarks, serializeBookmarks } from '../lib/bookmarks';
+import { migrateLegacyBookmarks, parseBookmarksCsv, resolveBookmarks, serializeBookmarks } from '../lib/bookmarks';
 import { formatAtUtcOffset } from '../lib/date';
 import { filterEvents } from '../lib/filter';
 import { formatTranslation, getTranslations } from '../translations';
@@ -97,7 +97,8 @@ export function BookmarksModal({
     try {
       const csv = await file.text();
       if (!activeRef.current) return;
-      const imported = parseBookmarksCsv(csv, locale);
+      // Legacy 4-hex IDs are converted to the migrated events' UUIDs on import.
+      const imported = migrateLegacyBookmarks(parseBookmarksCsv(csv, locale), events).ids;
       changeBookmarks(
         (current) => [...new Set([...current, ...imported])],
         translations.bookmarksImported,

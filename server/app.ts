@@ -34,7 +34,7 @@ import { ZipRejectedError } from './zip';
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self'",
   // blob: lets the submission form preview the selected cover before upload.
   "img-src 'self' https: http: blob:",
   "font-src 'self'",

@@ -57,8 +57,8 @@ describe('Migrate from Amplify: reference ZIP', () => {
     assert.equal(report.warnings.filter((warning: string) => /covers\/.*missing/.test(warning)).length, 5);
     assert.equal(report.warnings.length, 9);
     assert.deepEqual(report.unreferencedFiles, ['covers/test.jpg', 'markdown/TEMPLATE.md', 'markdown/TEST.md']);
-    assert.equal(context.db.prepare('SELECT count(*) AS n FROM events').get().n, 0);
-    assert.equal(context.db.prepare('SELECT count(*) AS n FROM images').get().n, 0);
+    assert.equal((context.db.prepare('SELECT count(*) AS n FROM events').get() as { n: number }).n, 0);
+    assert.equal((context.db.prepare('SELECT count(*) AS n FROM images').get() as { n: number }).n, 0);
   });
 
   it('commits in one transaction, then skips everything on a re-run', async () => {
@@ -100,8 +100,8 @@ describe('Migrate from Amplify: reference ZIP', () => {
     assert.equal(rerun.events.alreadyMigrated, 8);
     assert.equal(rerun.holidays.toCreate, 0);
     assert.equal(rerun.holidays.alreadyPresent, 15);
-    assert.equal(context.db.prepare('SELECT count(*) AS n FROM events').get().n, 8);
-    assert.equal(context.db.prepare('SELECT count(*) AS n FROM national_holidays').get().n, 15);
+    assert.equal((context.db.prepare('SELECT count(*) AS n FROM events').get() as { n: number }).n, 8);
+    assert.equal((context.db.prepare('SELECT count(*) AS n FROM national_holidays').get() as { n: number }).n, 15);
     assert.equal(readdirSync(context.config.uploadsDir).length, 2);
   });
 
@@ -126,7 +126,7 @@ describe('Migrate from Amplify: reference ZIP', () => {
       response.json().message,
       'csv/, markdown/ and covers/ must be at the root of the ZIP, but they are inside agt_event_calendar_files/. Select those three folders and compress them directly.',
     );
-    assert.equal(context.db.prepare('SELECT count(*) AS n FROM events').get().n, 0);
+    assert.equal((context.db.prepare('SELECT count(*) AS n FROM events').get() as { n: number }).n, 0);
   });
 });
 

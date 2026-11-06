@@ -1,15 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { Markdown } from './Markdown';
 import { BookmarkIcon, ExternalLinkIcon, ShareIcon, XIcon } from './Icons';
 import { formatAtUtcOffset } from '../lib/date';
-import {
-  buildGlyphToolUrl,
-  markdownUrlTransform,
-  safeExternalUrl,
-  withCacheBuster,
-  withEventId,
-} from '../lib/urls';
+import { buildGlyphToolUrl, withEventId } from '../lib/urls';
 import type { CalendarEvent } from '../types';
 import { formatTranslation, getTranslations } from '../translations';
 
@@ -18,6 +11,7 @@ interface EventModalProps {
   locale: string;
   timeZone: string;
   timeZoneOffset: number;
+  glyphToolUrl: string;
   bookmarked: boolean;
   bookmarkError: string;
   onToggleBookmark: (id: string) => boolean;
@@ -56,6 +50,7 @@ export function EventModal({
   locale,
   timeZone,
   timeZoneOffset,
+  glyphToolUrl: glyphToolBaseUrl,
   bookmarked,
   bookmarkError,
   onToggleBookmark,
@@ -64,10 +59,6 @@ export function EventModal({
   const translations = getTranslations(locale);
   const dialogRef = useRef<HTMLDivElement>(null);
   const shareRequestRef = useRef(0);
-  const [description, setDescription] = useState('');
-  const [descriptionState, setDescriptionState] = useState<
-    'idle' | 'loading' | 'loaded' | 'error'
-  >('idle');
   const [coverFailed, setCoverFailed] = useState(false);
   const [shareState, setShareState] = useState<
     'idle' | 'copying' | 'copied' | 'error'
@@ -120,35 +111,7 @@ export function EventModal({
   }, [selectedEvent, onClose]);
 
   useEffect(() => {
-    setDescription('');
-    setDescriptionState('idle');
     setCoverFailed(false);
-    if (!selectedEvent?.descriptionUrl) return;
-
-    const controller = new AbortController();
-    setDescriptionState('loading');
-    fetch(withCacheBuster(selectedEvent.descriptionUrl), {
-      cache: 'no-store',
-      signal: controller.signal,
-      headers: { Accept: 'text/markdown, text/plain;q=0.9' },
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Description request failed (${response.status})`);
-        }
-        return response.text();
-      })
-      .then((text) => {
-        setDescription(text);
-        setDescriptionState('loaded');
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
-        console.error('Unable to load event description', error);
-        setDescriptionState('error');
-      });
-
-    return () => controller.abort();
   }, [selectedEvent]);
 
   useEffect(() => {
@@ -179,7 +142,7 @@ export function EventModal({
       dateStyle: 'full',
       timeStyle: 'medium',
     })} (${timeZone})`;
-  const glyphToolUrl = buildGlyphToolUrl(event.galaxy, event.portalCode);
+  const glyphToolUrl = buildGlyphToolUrl(event.galaxy, event.portalCode, glyphToolBaseUrl);
   const toastMessage = toast === 'event-url-copied'
     ? translations.eventUrlCopied
     : toast === 'bookmark-added'
@@ -376,42 +339,10 @@ export function EventModal({
 
           <section className="detail-section" aria-labelledby="description-heading">
             <h3 id="description-heading">{translations.description}</h3>
-            {!event.descriptionUrl && (
+            {event.description ? (
+              <Markdown imageAlt={translations.externalImageAlt}>{event.description}</Markdown>
+            ) : (
               <p className="empty-note">{translations.noMarkdownDescription}</p>
-            )}
-            {descriptionState === 'loading' && (
-              <p className="loading-note" role="status">
-                {translations.loadingRemoteDescription}
-              </p>
-            )}
-            {descriptionState === 'error' && (
-              <p className="error-note" role="alert">
-                {translations.remoteDescriptionError}
-              </p>
-            )}
-            {descriptionState === 'loaded' && (
-              <div className="markdown-body">
-                <ReactMarkdown
-                  skipHtml
-                  remarkPlugins={[remarkGfm]}
-                  urlTransform={markdownUrlTransform}
-                  components={{
-                    a: ({ href, children }) => {
-                      const safe = href ? safeExternalUrl(href) : null;
-                      return safe ? (
-                        <a href={safe} target="_blank" rel="noopener noreferrer">
-                          {children}
-                        </a>
-                      ) : (
-                        <span>{children}</span>
-                      );
-                    },
-                    img: () => null,
-                  }}
-                >
-                  {description}
-                </ReactMarkdown>
-              </div>
             )}
           </section>
 
