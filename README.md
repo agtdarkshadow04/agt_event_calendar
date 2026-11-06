@@ -26,7 +26,9 @@ npm test
 npm run build
 ```
 
-The production site is written to `dist/`. The lint command performs a strict TypeScript project check. Tests cover CSV quoting and validation, filtering, and multi-day calendar behavior.
+`npm run check` runs all three in sequence.
+
+The production site is written to `dist/`. The lint command performs a strict TypeScript project check. Tests cover CSV quoting and validation, filtering, multi-day calendar behavior, bookmarks, settings, the change log, national holidays, URL helpers, and translation completeness.
 
 ## Event database configuration
 
@@ -82,8 +84,12 @@ In Amplify Hosting, connect this repository and select the intended deployment b
 - Event parsing and schema validation live in `src/lib/csv.ts`.
 - Calendar overlap and multi-day calculations live in `src/lib/date.ts`.
 - Filter behavior lives in `src/lib/filter.ts`.
-- The database URL and bug-report URL live in `src/config.ts`.
+- Bookmark and settings persistence live in `src/lib/bookmarks.ts` and `src/lib/settings.ts`.
+- Change-log and national-holiday parsing live in `src/lib/changelog.ts` and `src/lib/holidays.ts`.
+- Interface strings for every supported locale live in `src/translations.ts`.
+- All external URLs (event database, change log, national holidays, event form, support) live in `src/config.ts`.
 - Visual tokens and responsive rules live in `src/styles.css`.
+- Contributor and AI-agent conventions live in `AGENTS.md` (imported by `CLAUDE.md`).
 
 The interface presents calendar timestamps in the viewer's local timezone. The details modal shows both local time and the authoritative UTC instant.
 
