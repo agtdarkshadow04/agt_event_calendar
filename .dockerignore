@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-server
+.test-build
+data
+.env
+.env.*
+!.env.example
+config.yaml
+.git
+*.log

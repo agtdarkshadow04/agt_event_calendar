@@ -1,0 +1,373 @@
+import { useEffect, useRef, useState } from 'react';
+import { Markdown } from './Markdown';
+import { BookmarkIcon, ExternalLinkIcon, ShareIcon, XIcon } from './Icons';
+import { formatAtUtcOffset } from '../lib/date';
+import { buildGlyphToolUrl, withEventId } from '../lib/urls';
+import type { CalendarEvent } from '../types';
+import { formatTranslation, getTranslations } from '../translations';
+
+interface EventModalProps {
+  selectedEvent: CalendarEvent | null;
+  locale: string;
+  timeZone: string;
+  timeZoneOffset: number;
+  glyphToolUrl: string;
+  bookmarked: boolean;
+  bookmarkError: string;
+  onToggleBookmark: (id: string) => boolean;
+  onClose: () => void;
+}
+
+function DetailField({
+  label,
+  value,
+  optional = false,
+  monospace = false,
+  missingText = '',
+}: {
+  label: string;
+  value: string | null;
+  optional?: boolean;
+  monospace?: boolean;
+  missingText?: string;
+}) {
+  return (
+    <div className="detail-field">
+      <dt>{label}</dt>
+      <dd className={monospace ? 'monospace' : undefined}>
+        {value || (optional ? <span className="missing">{missingText}</span> : '—')}
+      </dd>
+    </div>
+  );
+}
+
+function formatUtc(date: Date): string {
+  return `${date.toISOString().replace('T', ' ').replace('.000Z', 'Z')} (UTC)`;
+}
+
+export function EventModal({
+  selectedEvent,
+  locale,
+  timeZone,
+  timeZoneOffset,
+  glyphToolUrl: glyphToolBaseUrl,
+  bookmarked,
+  bookmarkError,
+  onToggleBookmark,
+  onClose,
+}: EventModalProps) {
+  const translations = getTranslations(locale);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const shareRequestRef = useRef(0);
+  const [coverFailed, setCoverFailed] = useState(false);
+  const [shareState, setShareState] = useState<
+    'idle' | 'copying' | 'copied' | 'error'
+  >('idle');
+  const [toast, setToast] = useState<
+    'event-url-copied' | 'bookmark-added' | 'bookmark-removed' | null
+  >(null);
+
+  useEffect(() => {
+    if (!selectedEvent) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (keyEvent: KeyboardEvent) => {
+      if (keyEvent.key === 'Escape') {
+        keyEvent.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (keyEvent.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (
+        keyEvent.shiftKey
+        && (document.activeElement === first || document.activeElement === dialogRef.current)
+      ) {
+        keyEvent.preventDefault();
+        last.focus();
+      } else if (!keyEvent.shiftKey && document.activeElement === last) {
+        keyEvent.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    requestAnimationFrame(() => dialogRef.current?.focus());
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
+    };
+  }, [selectedEvent, onClose]);
+
+  useEffect(() => {
+    setCoverFailed(false);
+  }, [selectedEvent]);
+
+  useEffect(() => {
+    setShareState('idle');
+    setToast(null);
+    return () => {
+      shareRequestRef.current += 1;
+    };
+  }, [selectedEvent]);
+
+  useEffect(() => {
+    if (shareState !== 'copied') return;
+    const timeout = window.setTimeout(() => setShareState('idle'), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [shareState, selectedEvent]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [toast, selectedEvent]);
+
+  if (!selectedEvent) return null;
+
+  const event = selectedEvent;
+  const formatLocal = (date: Date) =>
+    `${formatAtUtcOffset(date, locale, timeZoneOffset, {
+      dateStyle: 'full',
+      timeStyle: 'medium',
+    })} (${timeZone})`;
+  const glyphToolUrl = buildGlyphToolUrl(event.galaxy, event.portalCode, glyphToolBaseUrl);
+  const toastMessage = toast === 'event-url-copied'
+    ? translations.eventUrlCopied
+    : toast === 'bookmark-added'
+      ? translations.bookmarkAdded
+      : toast === 'bookmark-removed'
+        ? translations.bookmarkRemoved
+        : '';
+  const toggleBookmark = () => {
+    if (!onToggleBookmark(event.id)) return;
+    setToast(bookmarked ? 'bookmark-removed' : 'bookmark-added');
+  };
+  const shareEvent = async () => {
+    const request = ++shareRequestRef.current;
+    setShareState('copying');
+    try {
+      await navigator.clipboard.writeText(
+        withEventId(window.location.href, event.id),
+      );
+      if (request === shareRequestRef.current) {
+        setShareState('copied');
+        setToast('event-url-copied');
+      }
+    } catch (error: unknown) {
+      console.error('Unable to copy event URL', error);
+      if (request === shareRequestRef.current) setShareState('error');
+    }
+  };
+
+  return (
+    <div
+      className="modal-backdrop"
+      onMouseDown={(mouseEvent) => {
+        if (mouseEvent.target === mouseEvent.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="event-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="event-dialog-title"
+        aria-describedby="event-dialog-summary"
+        ref={dialogRef}
+        tabIndex={-1}
+      >
+        <header className="modal-header">
+          <div>
+            <p className="eyebrow">
+              {formatTranslation(translations.eventRecord, { id: event.id })}
+            </p>
+            <h2 id="event-dialog-title">{event.name}</h2>
+            <p id="event-dialog-summary" className="modal-subtitle">
+              {event.type} · {event.galaxy}
+            </p>
+          </div>
+          <div className="modal-header-actions">
+            {shareState === 'error' && (
+              <span className="modal-share-status error-note" role="alert">
+                {translations.copyUrlError}
+              </span>
+            )}
+            <button
+              className="button button-secondary button-icon event-bookmark-button"
+              type="button"
+              onClick={toggleBookmark}
+              aria-label={bookmarked ? translations.removeBookmark : translations.bookmark}
+              title={bookmarked ? translations.removeBookmark : translations.bookmark}
+              aria-pressed={bookmarked}
+            >
+              <BookmarkIcon />
+            </button>
+            <button
+              className={`button button-secondary button-icon${shareState === 'copied' ? ' event-share-copied' : ''}`}
+              type="button"
+              onClick={() => void shareEvent()}
+              disabled={shareState === 'copying' || shareState === 'copied'}
+              aria-label={translations.share}
+            >
+              <ShareIcon />
+            </button>
+            <button
+              className="button button-icon modal-close"
+              type="button"
+              onClick={onClose}
+              aria-label={translations.closeEventDetails}
+            >
+              <XIcon />
+            </button>
+          </div>
+        </header>
+
+        <div
+          className={`modal-toast${toast ? ' is-visible' : ''}`}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {toastMessage}
+        </div>
+
+        <div className="modal-scroll-region">
+          {bookmarkError && <p className="error-note" role="alert">{bookmarkError}</p>}
+          <section className="cover-section" aria-label={translations.eventCoverImage}>
+            {event.coverImageUrl && !coverFailed ? (
+              <img
+                src={event.coverImageUrl}
+                alt={formatTranslation(translations.coverArtworkFor, {
+                  name: event.name,
+                })}
+                onError={() => setCoverFailed(true)}
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div
+                className="cover-fallback"
+                role="img"
+                aria-label={translations.noEventCover}
+              >
+                <span className="cover-mark" aria-hidden="true">AGT</span>
+                <span>
+                  {coverFailed
+                    ? translations.coverLoadError
+                    : translations.noCoverSupplied}
+                </span>
+              </div>
+            )}
+          </section>
+
+          <section className="detail-section" aria-labelledby="schedule-heading">
+            <h3 id="schedule-heading">{translations.schedule}</h3>
+            <dl className="detail-grid schedule-grid">
+              <DetailField
+                label={translations.startLocal}
+                value={formatLocal(event.start)}
+              />
+              <DetailField
+                label={translations.startUtc}
+                value={formatUtc(event.start)}
+                monospace
+              />
+              <DetailField
+                label={translations.endLocal}
+                value={event.end ? formatLocal(event.end) : null}
+                optional
+                missingText={translations.notSupplied}
+              />
+              <DetailField
+                label={translations.endUtc}
+                value={event.end ? formatUtc(event.end) : null}
+                optional
+                monospace
+                missingText={translations.notSupplied}
+              />
+            </dl>
+          </section>
+
+          <section className="detail-section" aria-labelledby="location-heading">
+            <h3 id="location-heading">{translations.eventInformation}</h3>
+            <dl className="detail-grid">
+              <DetailField label={translations.eventId} value={event.id} monospace />
+              <DetailField label={translations.eventType} value={event.type} />
+              <DetailField
+                label={translations.host}
+                value={event.civilization}
+                optional
+                missingText={translations.notSupplied}
+              />
+              <DetailField label={translations.galaxy} value={event.galaxy} />
+              <DetailField label={translations.region} value={event.region} />
+              <DetailField label={translations.system} value={event.system} />
+              <DetailField
+                label={translations.planet}
+                value={event.planet}
+                optional
+                missingText={translations.notSupplied}
+              />
+              <div className="detail-field">
+                <dt>{translations.portalCode}</dt>
+                <dd className="monospace portal-code">
+                  <span className="portal-code-value">{event.portalCode}</span>
+                  <a
+                    className="portal-link"
+                    href={glyphToolUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={translations.openGlyphTool}
+                    aria-label={translations.openGlyphTool}
+                  >
+                    <ExternalLinkIcon />
+                  </a>
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="detail-section" aria-labelledby="description-heading">
+            <h3 id="description-heading">{translations.description}</h3>
+            {event.description ? (
+              <Markdown imageAlt={translations.externalImageAlt}>{event.description}</Markdown>
+            ) : (
+              <p className="empty-note">{translations.noMarkdownDescription}</p>
+            )}
+          </section>
+
+          <section className="detail-section" aria-labelledby="links-heading">
+            <h3 id="links-heading">{translations.relatedLinks}</h3>
+            {event.links.length === 0 ? (
+              <p className="empty-note">{translations.noRelatedLinks}</p>
+            ) : (
+              <ul className="related-links">
+                {event.links.map((link, index) => (
+                  <li key={link}>
+                    <a href={link} target="_blank" rel="noopener noreferrer">
+                      {formatTranslation(translations.linkLabel, {
+                        number: index + 1,
+                      })}
+                      <span aria-hidden="true"> ↗</span>
+                      <span className="link-host">{new URL(link).hostname}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
