@@ -5,6 +5,10 @@ database (`better-sqlite3`) and serves a React 19 + Vite SPA (`src/`) plus a sep
 entry (`admin.html` → `src/admin/`). No router or state library. No cloud services, no CDNs, and no
 outbound requests from the server. User prefs and bookmarks live in `localStorage`.
 
+This app is the reference implementation of the **[AGT Web Application Specification](docs/agt-webapp-spec.md)**
+(v1.0.0), which standardizes every AGT web app. Its known deviations from the spec are listed in the spec's
+Appendix A; new code follows the spec.
+
 ## Branches (read first)
 
 - `main` holds only README/LICENSE. **There is no code on `main`.**
