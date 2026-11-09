@@ -1,10 +1,12 @@
 import { useId } from 'react';
+import type { ReactNode } from 'react';
 import type { ApiEvent } from '../lib/api';
 import { localInputToUtcIso, utcIsoToLocalInput } from '../lib/datetime';
 import { LIMITS } from '../lib/validation';
 import type { FieldError } from '../lib/validation';
 import { formatTranslation } from '../translations';
 import type { Translations } from '../translations';
+import { PortalGlyphs } from './PortalGlyphs';
 
 export interface EventFormState {
   name: string;
@@ -83,7 +85,9 @@ export function EventFormFields({ value, onChange, errors, translations, timeZon
     key: keyof EventFormState,
     field: string,
     label: string,
-    options: { required?: boolean; maxLength?: number; placeholder?: string; help?: string; className?: string } = {},
+    options: {
+      required?: boolean; maxLength?: number; placeholder?: string; help?: string; className?: string; preview?: ReactNode;
+    } = {},
   ) => {
     const error = errorFor(field);
     return (
@@ -98,6 +102,7 @@ export function EventFormFields({ value, onChange, errors, translations, timeZon
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-${field}-error` : undefined}
         />
+        {options.preview}
         {options.help && <small className="field-help">{options.help}</small>}
         {error && <small id={`${id}-${field}-error`} className="field-error">{error}</small>}
       </label>
@@ -139,6 +144,7 @@ export function EventFormFields({ value, onChange, errors, translations, timeZon
       {text('planet', 'planet', translations.planet, { maxLength: LIMITS.location })}
       {text('portalCode', 'portalCode', translations.portalCode, {
         required: true, maxLength: 12, placeholder: '0123ABCD4567', className: 'monospace-input',
+        preview: <PortalGlyphs code={value.portalCode} className="portal-glyphs-preview" />,
       })}
       <label className="field span-2">
         <span>{translations.relatedLinks} ({translations.optional})</span>

@@ -30,6 +30,7 @@ const LEGACY_ID_PATTERN = /^[0-9a-f]{4}$/i;
 const UTC_ISO_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|\+00:00)$/i;
 const PORTAL_CODE_PATTERN = /^[0-9a-z]{12}$/i;
+const PORTAL_GLYPHS_PATTERN = /^[0-9A-F]{12}$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /** RFC 9562 version 4 UUID: version nibble `4`, variant bits `10xx`. */
@@ -40,6 +41,22 @@ export function isUuidV4(value: string): boolean {
 /** Legacy Amplify-era event ID: exactly four hexadecimal characters. */
 export function isLegacyEventId(value: string): boolean {
   return LEGACY_ID_PATTERN.test(value);
+}
+
+/**
+ * Normalises a portal code for display as glyphs: trimmed and uppercased.
+ * Returns null unless it is exactly 12 hexadecimal digits, the only codes the
+ * NMS Glyphs Mono font can draw. Placeholders such as `TBA` return null and
+ * are shown as plain text.
+ */
+export function portalGlyphCode(value: string): string | null {
+  const code = value.trim().toUpperCase();
+  return PORTAL_GLYPHS_PATTERN.test(code) ? code : null;
+}
+
+/** True when `value` is a portal code that can be shown as glyphs (12 hexadecimal digits). */
+export function isPortalCode(value: string): boolean {
+  return portalGlyphCode(value) !== null;
 }
 
 /** Canonical spelling for an event ID: UUIDs lowercase, legacy IDs uppercase. */
