@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Spec version** | 1.0.1 |
+| **Spec version** | 2.0.0 |
 | **Status** | Normative |
 | **Audience** | AI coding agents that design, build, review or maintain AGT web applications |
 | **Reference implementation** | [`Folfchie/agt_event_calendar`](https://github.com/Folfchie/agt_event_calendar) (AGT Event Calendar), with the deviations listed in [Appendix A](#appendix-a-reference-implementation-deviations) |
@@ -47,7 +47,8 @@ change an existing one.
 5. **Boring, uniform technology.** Every app uses the same stack and layout, so an agent that knows one AGT
    app knows them all.
 6. **Recoverable.** Every instance can be backed up and restored from its admin dashboard.
-7. **For a global community.** Every UI is accessible and available in all AGT locales.
+7. **Accountable.** The admin can see what the server did (server log) and what users did (audit log).
+8. **For a global community.** Every UI is accessible and available in all AGT locales.
 
 ## 2. Naming
 
@@ -99,6 +100,7 @@ Add a row (next free port) when you create an app.
 | Markdown (if needed) | `react-markdown` + `remark-gfm` only ([SEC-12](#106-user-content)) |
 | Captcha (if anonymous writes) | `altcha` (widget) + `altcha-lib` (server) ([§11](#11-anonymous-input-and-altcha)) |
 | ZIP (backups) | `yazl` (write) + `yauzl` (read) |
+| Logging | `pino` (Fastify's logger) to stdout and the log store ([§13](#13-logging)) |
 | Server bundle | `esbuild` → `dist-server/index.mjs` |
 | Tests | `node:test` + `node:assert/strict`; Fastify `inject()` for HTTP |
 | Lint | `tsc -b` (no ESLint, no Prettier) |
@@ -107,7 +109,7 @@ Add a row (next free port) when you create an app.
   Use React state, context and URL query parameters. An app with more than one public page MAY add a second
   Vite entry instead of a router.
 - **STACK-3** Do not add a CSS framework (Tailwind, Bootstrap, …) or a component library. Use plain CSS with
-  the AGT design tokens ([§14](#14-visual-design-system)).
+  the AGT design tokens ([§15](#15-visual-design-system)).
 - **STACK-4** Commit `package-lock.json`. Install with `npm ci`.
 
 ## 4. Repository layout
@@ -116,9 +118,9 @@ Add a row (next free port) when you create an app.
 
 ```text
 agt_<app_snake>/
-├── AGENTS.md                 # agent guide (§19.2); CLAUDE.md contains only "@AGENTS.md"
+├── AGENTS.md                 # agent guide (§20.2); CLAUDE.md contains only "@AGENTS.md"
 ├── CLAUDE.md
-├── README.md                 # operator documentation (§19.1)
+├── README.md                 # operator documentation (§20.1)
 ├── LICENSE
 ├── Dockerfile
 ├── docker-compose.yml
@@ -126,7 +128,7 @@ agt_<app_snake>/
 ├── config.example.yaml       # every key, commented, with its default
 ├── .gitignore  .dockerignore .gitattributes
 ├── deploy/
-│   ├── agt-<app>.service     # systemd unit for local installs (§17.2)
+│   ├── agt-<app>.service     # systemd unit for local installs (§18.2)
 │   └── Caddyfile.example     # TLS reverse proxy example
 ├── index.html                # public SPA entry
 ├── admin.html                # admin dashboard entry (noindex)
@@ -143,21 +145,25 @@ agt_<app_snake>/
 │   ├── context.ts            # AppContext, settings precedence helpers
 │   ├── db.ts                 # open DB, MIGRATIONS list, runMigrations
 │   ├── migrations/0001_initial.sql
+│   ├── migrations/logs/0001_initial.sql   # log store migrations (LOG-1)
 │   ├── repository.ts         # all SQL lives here
 │   ├── http.ts               # HttpError, multipart helper
 │   ├── passwords.ts          # scrypt hashing, constant-time compare
 │   ├── session.ts            # cookie sessions, CSRF check
+│   ├── logs.ts               # log store, server-log stream, retention job (§13)
+│   ├── audit.ts              # audit onResponse hook, IP hashing (§13)
 │   ├── backup.ts  zip.ts     # backup/restore and safe ZIP handling
 │   ├── images.ts             # (if uploads) magic-byte validation and storage
 │   ├── altcha.ts             # (if anonymous writes)
 │   └── test/                 # *.test.ts + helpers.ts (+ fixtures/)
 └── src/
     ├── main.tsx  App.tsx     # public UI root
-    ├── styles.css            # public styles; tokens block from §14
+    ├── styles.css            # public styles; tokens block from §15
     ├── translations.ts       # public UI strings, all locales
     ├── components/           # public components; useDialog.ts; Icons.tsx
     ├── lib/                  # framework-free logic + *.test.ts (validation.ts, api.ts, client.ts, settings.ts …)
     └── admin/                # admin dashboard: main.tsx AdminApp.tsx *Panel.tsx admin.css i18n.ts context.ts
+                              # incl. ServerLogPanel.tsx, AuditLogPanel.tsx (§13.6)
 ```
 
 - **REPO-2** `.gitignore` and `.dockerignore` MUST exclude `.env`, `.env.*` (except `.env.example`),
@@ -180,8 +186,9 @@ agt_<app_snake>/
   error to the error body ([API-6](#62-request-and-response-conventions)). Unexpected errors are logged and
   returned as `500 { error: "internal", message: "An unexpected server error occurred." }`, never with stack
   traces or internal messages.
-- **SRV-6** Logging uses Fastify's built-in pino logger, level from `server.logLevel`. MUST NOT log passwords,
-  setup passwords, session tokens, cookies, HMAC keys, database passwords or request bodies of auth routes.
+- **SRV-6** Logging uses pino as Fastify's logger, level from `server.logLevel`, and also feeds the server log
+  ([§13](#13-logging)). MUST NOT log passwords, setup passwords, session tokens, cookies, HMAC keys, database
+  passwords, raw client IP addresses or request bodies.
 - **SRV-7** Handle `SIGTERM` and `SIGINT`: `await app.close()`, close the database, exit 0.
 - **SRV-8** Refuse to start (exit 1, one clear log line) on an invalid config file, a database schema newer
   than the app supports, or a missing required secret.
@@ -338,7 +345,7 @@ agt_<app_snake>/
 - **DATA-9** Uploaded files are stored on disk under `storage.dataDir/<uploadsDir>` with server-generated
   names `<uuid>.<ext>`, never in the database and never under the client-supplied name. The database stores
   the ID, detected MIME type, size and SHA-256.
-- **DATA-10** All persistent state (database, uploads, automatic backups) lives under one data directory:
+- **DATA-10** All persistent state (database, log store, uploads, automatic backups) lives under one data directory:
   `/app/data` in Docker (one named volume), `/var/lib/agt-<app>` for local installs. Postgres data lives in
   its own volume or cluster.
 
@@ -388,6 +395,7 @@ agt_<app_snake>/
   #   databaseFile: agt-<app>.sqlite   # SQLite apps; relative to dataDir
   #   uploadsDir: uploads        # relative to dataDir
   #   backupsDir: backups        # relative to dataDir
+  #   logDatabaseFile: logs.sqlite     # SQLite apps; log store (LOG-1), relative to dataDir
   # database:                    # Postgres apps only; password is AGT_<APP>_DB_PASSWORD in .env
   #   host: localhost
   #   port: 5432
@@ -415,6 +423,11 @@ agt_<app_snake>/
   #   maxZipBytes: 209715200
   #   maxUncompressedBytes: 1073741824
   #   maxEntries: 10000
+  # logs:                        # retention (LOG-16)
+  #   serverRetentionDays: 30
+  #   serverMaxEntries: 100000
+  #   auditRetentionDays: 365    # at least 30
+  #   auditMaxEntries: 1000000
   ```
 
 ### 8.2 Dashboard settings and precedence
@@ -561,7 +574,7 @@ agt_<app_snake>/
 
 - **SEC-15** The container runs as the non-root `node` user with `read_only: true`, `tmpfs: /tmp`,
   `security_opt: no-new-privileges:true`, and only the data volume writable. The systemd unit uses the
-  hardening in [§17.2](#172-local-installation-ubuntu--debian).
+  hardening in [§18.2](#182-local-installation-ubuntu--debian).
 
 ## 11. Anonymous input and ALTCHA
 
@@ -600,8 +613,8 @@ agt_<app_snake>/
   config.yaml          # the current file, byte for byte, if one exists
   ```
 
-  `.env` is never included. The README warns that backups contain the admin password hash and generated
-  secrets and must be stored securely.
+  `.env` and the log store (LOG-17) are never included. The README warns that backups contain the admin
+  password hash and generated secrets and must be stored securely.
 - **BAK-3** Restore MUST first run a **preview** that validates without changing anything: manifest format
   and checksums, only expected paths, size and entry limits, database integrity (`PRAGMA integrity_check` /
   `pg_restore --list`), schema version (older → will be migrated; newer → refused), required tables, and
@@ -612,21 +625,188 @@ agt_<app_snake>/
   failure leaves the instance unchanged (SQLite: prepare files beside the live ones, then rename-swap and
   reopen `context.db`; Postgres: `pg_restore --clean --if-exists --single-transaction --no-owner`); runs pending
   migrations; drops dashboard settings for keys now locked by `config.yaml` and lists them in the report;
-  ends all sessions (the restored admin account replaces the current one) and signs the caller out.
+  ends all sessions (the restored admin account replaces the current one) and signs the caller out. The log
+  store is left untouched, and the restore itself is audited (LOG-17).
 - **BAK-5** Restore MUST NEVER write `config.yaml`. If the backup contains one, the preview shows a line diff
   and offers it for download; the README explains how to put it in place by hand.
 - **BAK-6** Postgres apps run `pg_dump`/`pg_restore` as child processes with the password in the `PGPASSWORD`
   environment variable of the child (never on the command line), and the client version MUST be ≥ the server
   major version.
 
-## 13. Frontend architecture
+## 13. Logging
+
+Every app keeps two logs, stored in the database and shown in the admin dashboard:
+
+| | Server log | Audit log |
+| --- | --- | --- |
+| Contains | Events **not** caused by a user: startup, shutdown, migrations, scheduled jobs, configuration warnings, internal errors | Events **caused by a user**, admin or anonymous: every state-changing request, sensitive reads, sign-ins, submissions, and rejected or denied attempts |
+| Purpose | Debugging; showing warnings and errors to the admin | Accountability: who did what, when, with what outcome |
+| Admin can | Filter, search, export, clear | Filter, search, export. **Never** edit or clear it |
+
+Rule of thumb: if a request caused it, it belongs in the audit log; if the server did it by itself, it belongs in
+the server log. When a user's request fails because of an internal error, both logs get an entry: the audit entry
+records the outcome, the server log entry records the error. The two share the request ID.
+
+### 13.1 Storage
+
+- **LOG-1** Both logs are stored in a **log store** separate from the app's data, so backups and restores never
+  touch them (LOG-17):
+  - SQLite apps: a second SQLite file, `storage.logDatabaseFile` (default `logs.sqlite`, relative to `dataDir`),
+    opened with the same pragmas as the main database (DATA-5).
+  - Postgres apps: a `logs` schema in the app's database.
+
+  The log store has its own numbered migrations in `server/migrations/logs/NNNN_*.sql`, listed in `LOG_MIGRATIONS`
+  and run at startup like DATA-3/DATA-4. It also holds a `log_meta` key-value table (the IP-hash key and the
+  server-log "seen" marker).
+- **LOG-2** Log tables are append-only from the application's point of view: rows are never updated, except the
+  `count`/`last_at` columns of a coalesced audit entry (LOG-11), and are deleted only by retention (LOG-15) or, for
+  the server log only, by the admin (LOG-20). Log tables are exempt from DATA-8.
+- **LOG-3** A failure to write a log entry MUST NOT fail the request or crash the server. Report it once to
+  stdout (never recursively into the server log) and carry on.
+- **LOG-4** Times are UTC (`at`, and `last_at` for audit entries). Every entry has a UUIDv4 `id`. Index both
+  tables on `at` and on every column the admin can filter by.
+
+### 13.2 Server log
+
+- **LOG-5** Create the logger with `pino` (a direct dependency, same major version as the one Fastify uses),
+  writing through `pino.multistream` to stdout **and** to a stream that inserts entries into the log store, and pass
+  it to Fastify as `loggerInstance`. stdout follows `server.logLevel`. The log store receives **info and above**
+  (`info`, `warn`, `error`, `fatal`), whatever `server.logLevel` is. `debug` and `trace` go to stdout only.
+- **LOG-6** Per-request access logs ("incoming request", "request completed") are **not** stored in the server
+  log: they describe user activity, which the audit log covers. Set `disableRequestLogging: true` or filter them out
+  of the log-store stream.
+- **LOG-7** A server log entry has: `id`, `at`, `level`, `source`, `message`, `requestId` (when the event happened
+  while handling a request, e.g. a 500), and `details` (JSON). `source` is a short stable name of the subsystem:
+  `startup`, `shutdown`, `config`, `migrations`, `retention`, `backup`, `http` (unexpected errors while handling a
+  request), or an app-specific one. Messages are English.
+- **LOG-8** At minimum the server log records: startup (app version, schema versions, listen address, config file
+  found or defaults used); configuration warnings (including the setup-password reminders of AUTH-6); every
+  migration applied; each retention run that deleted entries (with counts); every unexpected error (5xx), with the
+  error message and stack in `details`; failures of background work; shutdown.
+- **LOG-9** SRV-6 and SEC-8 apply in full: no passwords, setup passwords, tokens, cookies, keys, database passwords
+  or request bodies in `message` or `details`. Error details contain only the error's name, message, stack and the
+  route; never the request headers or body.
+
+### 13.3 Audit log
+
+- **LOG-10** An audit entry has:
+
+  | Field | Content |
+  | --- | --- |
+  | `id`, `at`, `last_at`, `count` | ID; first and last time; number of identical events (`count` is 1 unless coalesced, LOG-11) |
+  | `actor_type` | `admin` (valid session) or `anonymous` |
+  | `actor` | Admin: the username. Anonymous: an identifier the feature already collects (e.g. the submitter's AGT username), else null |
+  | `ip_hash` | Pseudonymous client address (LOG-12). Never the raw IP |
+  | `client` | `web` when the request came from the app's own UI (LOG-13), otherwise `api` |
+  | `action` | The route's OpenAPI `operationId` (e.g. `createAdminEvent`, `login`, `submitEvent`) |
+  | `method`, `route` | HTTP method and the route pattern (`/api/admin/events/:id`), never the full URL with query |
+  | `target_type`, `target_id` | The affected resource (e.g. `event` and its UUID), when there is one |
+  | `outcome` | `success` (2xx/3xx), `denied` (401, 403), `rate_limited` (429) or `failure` (any other 4xx/5xx) |
+  | `status_code`, `request_id` | HTTP status; Fastify request ID, shared with any server log entry for the same request |
+  | `details` | JSON summary of the change, never the full payload (LOG-14) |
+
+- **LOG-11** **What is audited.** Audit through one `onResponse` hook (in `server/audit.ts`), not by hand in each
+  handler, so no route can be forgotten:
+  - every request to a non-GET `/api/` route, whatever the client and whatever the outcome; this includes
+    successful and failed setup, login and logout, anonymous submissions, and every admin change;
+  - GET routes marked `config: { audit: true }`: sensitive reads such as backup downloads and log exports;
+  - every 401 or 403 response from an `/api/admin/` route, and every 429 response from any route, including GET
+    routes that are otherwise not audited.
+
+  Ordinary reads (lists, details, health, the OpenAPI document) and unknown routes are not audited. Handlers add
+  the target and details by setting `request.audit` (`{ targetType, targetId, actor, details }`); the hook fills in
+  everything else.
+
+  **Coalescing.** Entries whose outcome is not `success` are coalesced: if an entry with the same `action`,
+  `outcome`, `status_code` and `ip_hash` was written in the last 60 seconds, increment its `count` and set `last_at`
+  instead of inserting a new row. This keeps floods of failed logins or rate-limited requests from filling the log.
+- **LOG-12** **IP pseudonymization.** `ip_hash` = the first 16 hex characters of HMAC-SHA256(key, address), where
+  `key` is 32 random bytes generated once and stored in `log_meta`, and `address` is `request.ip` (which honours
+  `server.trustProxy`). Normalize IPv4-mapped IPv6 addresses to IPv4. For IPv6, hash only the /64 prefix, because
+  clients rotate addresses inside their /64. The raw IP is never stored or logged, in either log. Because the key
+  lives in the log store, hashes stay comparable across restores.
+- **LOG-13** `apiRequest()` (FE-2) sends `x-agt-client: web` on every request, and the hook records `client: web`
+  when it is present. This header is informational only: it is easy to forge, and never affects authorization.
+- **LOG-14** `details` summarizes what changed and MUST NOT contain secrets (SEC-8) or bulk content:
+  - Settings changes: each key with its old and new value.
+  - Create/replace: the resource's name or title and the changed field names, not the field values (Markdown
+    bodies, descriptions and file contents are never copied into the log).
+  - Uploads, imports, restores: file size, detected type and the counts from the report.
+  - Validation failures: the field names that failed, not the submitted values.
+  - Password changes and setup: only that they happened.
+
+### 13.4 Retention
+
+- **LOG-15** A retention job runs at startup and then every hour (`setInterval(...).unref()`). It deletes entries
+  older than the retention period, then, if a log still has more entries than its cap, deletes the oldest until it
+  is at the cap. For the audit log, the cap removes the oldest `denied`, `rate_limited` and `failure` entries first,
+  and the oldest `success` entries only when there are none left. Each run that deletes anything writes one server
+  log entry with the counts.
+- **LOG-16** Retention is configured with these dashboard-editable settings (CFG-6, config file wins):
+
+  | Key | Default | Allowed |
+  | --- | --- | --- |
+  | `logs.serverRetentionDays` | `30` | 1–3650 |
+  | `logs.serverMaxEntries` | `100000` | 1000–10000000 |
+  | `logs.auditRetentionDays` | `365` | 30–3650 |
+  | `logs.auditMaxEntries` | `1000000` | 10000–10000000 |
+
+  The audit minimum of 30 days stops an admin from erasing recent audit history by shortening retention. Changing
+  these settings is itself audited (it is a settings change).
+
+### 13.5 Backups
+
+- **LOG-17** Backups do **not** contain either log, and restore never changes the log store. A restore is audited
+  like any other request, so the audit log keeps the record of the restore and of everything before it. The README
+  says that logs are not part of backups.
+
+### 13.6 Admin dashboard
+
+- **LOG-18** The dashboard has two tabs, **Server log** and **Audit log** (UI-8), backed by these admin routes
+  (session required; full schemas per API-10; both lists paginate per API-8, newest first):
+
+  | Route | Purpose |
+  | --- | --- |
+  | `GET /api/admin/logs/server` | List with filters `level` (minimum level), `source`, `from`, `to`, `q` (text in message), `limit`, `cursor` |
+  | `GET /api/admin/logs/server/export` | Same filters plus `format=jsonl\|csv`; download (`config.audit: true`) |
+  | `GET /api/admin/logs/server/summary` | `{ unseenWarnings, unseenErrors }` since the last "seen" marker |
+  | `POST /api/admin/logs/server/seen` | Sets the "seen" marker to now |
+  | `DELETE /api/admin/logs/server` | Clears the server log; `204` (audited like every write) |
+  | `GET /api/admin/logs/audit` | List with filters `actorType`, `action`, `outcome`, `targetType`, `targetId`, `from`, `to`, `q` (text in actor, action, target and details), `limit`, `cursor` |
+  | `GET /api/admin/logs/audit/export` | Same filters plus `format=jsonl\|csv`; download (`config.audit: true`) |
+
+  There is no route that edits or deletes audit entries.
+- **LOG-19** Both tabs show a table (time in the user's time zone, plus the columns of LOG-7 or LOG-10), the filters
+  above, paging, and an **Export** button that downloads the current filter as JSON Lines or CSV. Clicking an
+  entry shows its `details`. Levels and outcomes use colour and text (never colour alone): `error`/`fatal`/`failure`
+  in `--agt-red`, `warn`/`denied`/`rate_limited` in `--agt-orange`. Action codes are shown as they are (they are
+  stable identifiers); column and filter labels are translated (I18N-3).
+- **LOG-20** The Server log tab has a **Clear log** button that asks for confirmation. The Audit log tab has no
+  delete or clear control.
+- **LOG-21** **Error badge.** While there are unseen `warn` or higher entries, the Server log tab shows a badge with
+  their count (`.admin-badge`; red when any are `error` or `fatal`), and the admin header shows a link to the tab.
+  Opening the tab calls `POST /api/admin/logs/server/seen`. Poll the summary when the dashboard loads and when tabs
+  change. Don't poll in the background.
+- **LOG-22** Exports are generated on the server, streamed, and named `agt-<app>-<server|audit>-log-<timestamp>.<ext>`.
+  CSV exports MUST neutralize spreadsheet formulas: prefix any cell that starts with `=`, `+`, `-`, `@`, tab or
+  carriage return with a single quote.
+
+### 13.7 Privacy
+
+- **LOG-23** The README documents what both logs contain: the audit log holds pseudonymous IP hashes, admin
+  usernames and identifiers that anonymous features collect, for `logs.auditRetentionDays`. Public forms that write
+  to the audit log SHOULD say, in one translated sentence, that submissions are logged with a pseudonymous network
+  identifier for abuse prevention.
+
+## 14. Frontend architecture
 
 - **FE-1** Two Vite entries: `index.html` (public UI, `src/main.tsx`) and `admin.html` (admin dashboard,
   `src/admin/main.tsx`, `<meta name="robots" content="noindex">`). Both set `lang`, the viewport meta,
   `<meta name="theme-color" content="#0a0a0a">` and the AGT logo favicon. The admin bundle MUST NOT be
   imported by the public entry.
 - **FE-2** All API calls go through `apiRequest()` in `src/lib/client.ts`: same-origin, `cache: 'no-store'`,
-  `credentials: 'same-origin'`, JSON in/out, adds the CSRF header for non-GET requests, and throws
+  `credentials: 'same-origin'`, JSON in/out, adds the CSRF header for non-GET requests and `x-agt-client: web` to
+  every request (LOG-13), and throws
   `ApiError(status, message, code, fields)` built from the error body. API types live in `src/lib/api.ts`.
 - **FE-3** Server data is never persisted on the client (no service workers, no IndexedDB/localStorage
   caches of API data). `localStorage` holds only user preferences and user-owned lists (e.g. bookmarks) under
@@ -643,12 +823,12 @@ agt_<app_snake>/
 - **FE-8** Framework-free logic (date math, filtering, parsing, validation, settings) lives in `src/lib/`
   with unit tests; components stay thin.
 
-## 14. Visual design system
+## 15. Visual design system
 
 The AGT look is dark, high-contrast, orange-on-black with red accents, matching the AGT brand.
 All AGT apps MUST look like one family.
 
-### 14.1 Tokens
+### 15.1 Tokens
 
 - **UI-1** `src/styles.css` MUST start with this block, verbatim. `src/admin/admin.css` imports or repeats
   it. Use tokens (`var(--…)`) instead of raw colours in component CSS; add new tokens to this spec first.
@@ -681,7 +861,7 @@ All AGT apps MUST look like one family.
 
 - **UI-2** The theme is dark only. Do not add a light theme.
 
-### 14.2 Typography and assets
+### 15.2 Typography and assets
 
 - **UI-3** Bundle fonts in `public/` and declare them with `@font-face` (`font-display: swap`):
   `NMS Futura` (`/NMSFuturaProBook_Kerned.ttf`) for UI text; a monospace stack
@@ -728,7 +908,7 @@ All AGT apps MUST look like one family.
   (decorative: `alt=""` and `aria-hidden="true"` next to visible brand text). Copy brand assets from the
   reference implementation; never hotlink them.
 
-### 14.3 Page chrome
+### 15.3 Page chrome
 
 - **UI-6** `html, body { min-width: 300px }`. The body background is `--bg` with two subtle radial gradients
   and a faint 40 px grid overlay (`body::before`, fading out towards the bottom), as in the reference
@@ -736,15 +916,16 @@ All AGT apps MUST look like one family.
 - **UI-7** Public layout: a `site-header` with the brand lockup (logo, "Alliance of Galactic Travellers"
   brand name, product name) and a row of round icon buttons on the right (each with `aria-label` and
   `title`), then `<main id="main-content">`, then a `site-footer`. Include a support link to
-  `site.supportUrl`, and a user settings button ([I18N-4](#16-internationalization)).
+  `site.supportUrl`, and a user settings button ([I18N-4](#17-internationalization)).
 - **UI-8** Admin layout: `admin-shell` → `admin-header` (title, signed-in username, "View site" link, Sign
   out) → `admin-main` (max width 80 rem) → `admin-tabs` (a `role="tablist"` row of `.button`s;
   `aria-selected="true"` gets `--agt-red` border and a translucent red background; counts in `.admin-badge`)
   → one `admin-panel` per tab (`--surface`, `--line` border, `--radius`). Standard tabs, in order:
-  resource tabs, **Moderation queue** (if anonymous writes), **Settings**, **Backup & restore**, **Account**
-  (change password). Import/migration tabs, if any, go before Backup & restore.
+  resource tabs, **Moderation queue** (if anonymous writes), **Settings**, **Server log**, **Audit log**
+  ([§13.6](#136-admin-dashboard)), **Backup & restore**, **Account** (change password). Import/migration tabs, if
+  any, go before Backup & restore.
 
-### 14.4 Components
+### 15.4 Components
 
 - **UI-9** Use these class names and behaviours from the reference CSS (copy, don't reinvent):
 
@@ -768,7 +949,7 @@ All AGT apps MUST look like one family.
 - **UI-13** Media and sound never auto-play with sound. Any ambient audio (like the AGT anthem) is off until
   the user turns it on, and the choice is stored in user settings.
 
-## 15. Accessibility
+## 16. Accessibility
 
 - **A11Y-1** Target WCAG 2.2 AA. Text contrast ≥ 4.5:1 (the token pairs above meet it; check new pairs).
 - **A11Y-2** Dialogs use the shared `useDialog(dialogRef, initialFocusRef, onClose)` hook: Escape closes,
@@ -783,7 +964,7 @@ All AGT apps MUST look like one family.
   `aria-describedby`. Everything is operable by keyboard alone.
 - **A11Y-6** Provide a user-selectable font scale (1×–2×) in user settings and size text in `rem`.
 
-## 16. Internationalization
+## 17. Internationalization
 
 - **I18N-1** Every app ships all AGT locales, in this order (`value`, label, flag):
 
@@ -817,12 +998,12 @@ All AGT apps MUST look like one family.
 - **I18N-5** Format dates, times and numbers with `Intl` using the chosen locale and time zone. Server error
   `message`s are English; the client may map known `error` codes to translated text.
 
-## 17. Deployment
+## 18. Deployment
 
 Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods MUST be documented in
 `README.md` and kept working.
 
-### 17.1 Docker Compose
+### 18.1 Docker Compose
 
 - **DEP-1** `Dockerfile` (two stages; adjust `<APP>`):
 
@@ -944,7 +1125,7 @@ Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods 
 - **DEP-5** Upgrades: `git pull && docker compose up -d --build`. Migrations run at startup. The README says
   to download a backup first.
 
-### 17.2 Local installation (Ubuntu / Debian)
+### 18.2 Local installation (Ubuntu / Debian)
 
 - **DEP-6** The local method is a systemd service. The README documents these steps (adapted per app):
 
@@ -1026,7 +1207,7 @@ Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods 
 - **DEP-9** Local upgrades: `cd /opt/agt-<app> && sudo git pull && sudo npm ci && sudo npm run build &&
   sudo npm prune --omit=dev && sudo systemctl restart agt-<app>`.
 
-### 17.3 TLS reverse proxy
+### 18.3 TLS reverse proxy
 
 - **DEP-10** `deploy/Caddyfile.example`:
 
@@ -1040,7 +1221,7 @@ Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods 
   keep `session.secureCookie: auto`. When the proxy runs on the same host, bind the app to `127.0.0.1` or
   restrict the published port.
 
-## 18. Testing and tooling
+## 19. Testing and tooling
 
 - **TEST-1** `package.json` scripts MUST be:
 
@@ -1078,31 +1259,48 @@ Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods 
     skipped; `config.yaml` never written; pre-restore backup created;
   - migrations from an empty database and from each released schema version;
   - translation completeness for public and admin strings;
-  - every shared validator in `src/lib/validation.ts`.
+  - every shared validator in `src/lib/validation.ts`;
+  - logging (§13):
+    - every non-GET `/api/` route, and every `config.audit` GET route, writes an audit entry, with the right
+      `outcome` for success, validation failure, 401/403 and 429 (iterate the registered routes as in API-13);
+    - failed setup and login attempts are audited and coalesced, with `count` growing;
+    - `ip_hash` is set and no raw IP address appears in either log;
+    - `details` never contains passwords or the submitted values of failed fields;
+    - startup and migrations write server log entries, `debug` entries and request access logs do not, and a
+      500 writes a server log entry that shares the audit entry's `request_id`;
+    - retention deletes by age and by cap, removing non-success audit entries first, and respects the 30-day
+      audit minimum;
+    - backups contain no log data, and a restore leaves both logs in place and appends its own audit entry;
+    - clearing the server log works and is audited, and no route can delete audit entries;
+    - the warnings/errors summary and the "seen" marker;
+    - CSV exports neutralize formula-like cells.
 - **TEST-5** Never skip, disable or weaken a test to make a change pass.
 
-## 19. Documentation
+## 20. Documentation
 
-### 19.1 README.md (for operators)
+### 20.1 README.md (for operators)
 
 - **DOC-1** `README.md` MUST start with the title, the AI disclosure line
   (`> **AI Disclosure:** This software was created using generative AI. Its functionality has been verified by human review.`),
   a one-paragraph description and the self-hosting guarantees (no cloud, no CDNs, no outbound requests,
   where data lives). Then these sections, in order:
   1. **Contents**
-  2. **Installation**: *Docker Compose* (§17.1) and *Local installation (Ubuntu/Debian)* (§17.2), *TLS and
+  2. **Installation**: *Docker Compose* (§18.1) and *Local installation (Ubuntu/Debian)* (§18.2), *TLS and
      reverse proxies*, *Upgrading*
   3. **First run** (AUTH-5/6, including removing the setup password and restarting, for both methods)
   4. **Configuration reference**: sources, precedence, table of config-file-only keys, table of
      dashboard-editable keys (key, default, description)
   5. **Admin dashboard**: one bullet per tab
   6. App-specific sections (features, imports)
-  7. **Backup & restore**, including restoring `config.yaml` by hand
-  8. **Content safety** (what is accepted and how it is rendered)
-  9. **Development** (commands table, project layout table, link to `AGENTS.md` and this spec)
-  10. **Troubleshooting** (refuses to start, setup password missing, locked out, rate limits, proxy/HTTPS)
+  7. **Backup & restore**, including restoring `config.yaml` by hand, and that logs are not in backups
+  8. **Logs**: what the server log and the audit log contain, retention settings, export, and the privacy note
+     of LOG-23
+  9. **Content safety** (what is accepted and how it is rendered)
+  10. **Development** (commands table, project layout table, link to `AGENTS.md` and this spec)
+  11. **Troubleshooting** (refuses to start, setup password missing, locked out, rate limits, proxy/HTTPS;
+      pointing to the Server log tab first)
 
-### 19.2 AGENTS.md (for agents)
+### 20.2 AGENTS.md (for agents)
 
 - **DOC-2** `AGENTS.md` is the agent entry point; `CLAUDE.md` contains only `@AGENTS.md`. It MUST contain, in
   order: a two-paragraph overview (stack, database engine and why, deployment), a link to this spec with the
@@ -1111,7 +1309,7 @@ Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods 
   web app spec** (rule ID, what differs, why; "None" if empty). Keep it short and current; update it in the
   same PR as the code it describes.
 
-## 20. Agent workflow
+## 21. Agent workflow
 
 - **WF-1** Branches: each app documents its branches in `AGENTS.md`. Branches that serve live instances
   (e.g. `staging`, `prod`) are never pushed to directly; changes arrive by reviewed PR.
@@ -1127,7 +1325,7 @@ Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods 
   `config.example.yaml` and the README tables; new tables have a migration; the compliance checklist below
   still holds.
 
-## 21. Compliance checklist
+## 22. Compliance checklist
 
 Use this list to review a new app or a large change. Every item must be true or listed as a deviation.
 
@@ -1143,6 +1341,9 @@ Use this list to review a new app or a large change. Every item must be true or 
 - [ ] Uploads checked by magic bytes, no SVG; ZIPs read safely; Markdown rendered safely; no outbound requests.
 - [ ] ALTCHA + rate limit + moderation on every anonymous write (§11), or no anonymous writes.
 - [ ] Backup & restore with manifest, preview, pre-restore backup, atomic swap, never writes `config.yaml` (§12).
+- [ ] Server log and audit log in a separate log store, shown in the admin dashboard with filters, export and the
+      error badge; audit via one hook, coalesced, IP-pseudonymized, append-only; retention settings; not in
+      backups (§13).
 - [ ] Two Vite entries; `apiRequest()`; no client caching of server data.
 - [ ] Design tokens verbatim; AGT fonts and logo bundled; portal codes shown in NMS Glyphs Mono with hex
       text (UI-14); reference component classes; responsive to 300 px.
@@ -1153,14 +1354,16 @@ Use this list to review a new app or a large change. Every item must be true or 
 
 ## Appendix A: Reference implementation deviations
 
-The AGT Event Calendar predates this spec and was brought into compliance afterwards. The deviations that
-remain are kept on purpose and are also listed in its `AGENTS.md`. **Do not copy them into other apps.**
+The AGT Event Calendar predates this spec and was brought into compliance afterwards. The deviations below are
+also listed in its `AGENTS.md`. Unless a row says "to fix", they are kept on purpose. **Do not copy them into
+other apps.**
 
-| Rule | Calendar today | Why it is kept |
+| Rule | Calendar today | Why |
 | --- | --- | --- |
 | NAME-2, CFG-2 | Env vars `AGT_SETUP_PASSWORD`, `AGT_CONFIG_FILE`, `AGT_STATIC_DIR` (no app segment); cookie `agt_session`; Compose service `calendar`, volume `calendar-data`; SQLite file `agt-calendar.sqlite` | Renaming would break existing `.env` files, sign everyone out and orphan the data volume. New apps use the spec names. |
 | CFG-5 | Backup/import limits live under `migration.*` | Operators may have them in `config.yaml`, and unknown keys stop the server. |
 | STACK-1 | Extra runtime dependency `papaparse` | Parses the legacy CSVs for Migrate from Amplify. |
+| §13 (LOG-1..23) | No log store, server log or audit log yet; logs go to stdout only | **Not kept: to fix.** Added in spec 2.0.0, after the calendar's last compliance pass. |
 
 Calendar-specific features that are **not** part of the standard: Migrate from Amplify (`server/migration.ts`,
 `src/lib/csv.ts`), legacy 4-hex event IDs, bookmarks, the national holidays and change log content types, the
