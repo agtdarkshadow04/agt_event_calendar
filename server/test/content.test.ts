@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { after, describe, it } from 'node:test';
 import { insertEvent } from '../repository';
 import { CONTENT_SECURITY_POLICY } from '../app';
@@ -41,7 +44,9 @@ describe('events API', () => {
     });
     assert.equal(updated.json().event.name, 'Renamed');
     assert.equal(updated.json().event.status, 'published');
-    assert.equal((await app.inject({ method: 'DELETE', url: `/api/admin/events/${event.id}`, headers })).statusCode, 200);
+    const deleted = await app.inject({ method: 'DELETE', url: `/api/admin/events/${event.id}`, headers });
+    assert.equal(deleted.statusCode, 204);
+    assert.equal(deleted.body, '');
     assert.deepEqual((await app.inject({ method: 'GET', url: '/api/events' })).json(), []);
   });
 
@@ -83,11 +88,16 @@ describe('holidays and change log', () => {
     const created = await app.inject({ method: 'POST', url: '/api/admin/holidays', headers, payload: { ...holiday, published: false } });
     assert.equal(created.statusCode, 201);
     assert.deepEqual((await app.inject({ method: 'GET', url: '/api/holidays' })).json(), []);
-    const { id } = created.json();
-    await app.inject({ method: 'PUT', url: `/api/admin/holidays/${id}`, headers, payload: { ...holiday, published: true } });
+    const { holiday: stored, notices } = created.json();
+    assert.deepEqual(notices, []);
+    assert.deepEqual(stored, { id: stored.id, ...holiday, published: false });
+    const updated = await app.inject({ method: 'PUT', url: `/api/admin/holidays/${stored.id}`, headers, payload: { ...holiday, published: true } });
+    assert.equal(updated.json().holiday.published, true);
     assert.equal((await app.inject({ method: 'GET', url: '/api/holidays' })).json()[0].name, 'Founding Day');
     const invalid = await app.inject({ method: 'POST', url: '/api/admin/holidays', headers, payload: { ...holiday, date: '2025-02-29' } });
     assert.equal(invalid.statusCode, 400);
+    assert.equal((await app.inject({ method: 'DELETE', url: `/api/admin/holidays/${stored.id}`, headers })).statusCode, 204);
+    assert.equal((await app.inject({ method: 'DELETE', url: `/api/admin/holidays/${stored.id}`, headers })).statusCode, 404);
   });
 
   it('manages change-log entries (Date + Changes)', async () => {
@@ -98,8 +108,11 @@ describe('holidays and change log', () => {
     assert.equal(created.statusCode, 201);
     const list = (await app.inject({ method: 'GET', url: '/api/changelog' })).json();
     assert.deepEqual(list.map((entry: { date: string; changes: string }) => [entry.date, entry.changes]), [['2026-11-01', 'Self-hosting, SQLite']]);
-    await app.inject({ method: 'PUT', url: `/api/admin/changelog/${created.json().id}`, headers, payload: { date: '2026-11-01', changes: 'x', published: false } });
+    const { id } = created.json().changeLogEntry;
+    const updated = await app.inject({ method: 'PUT', url: `/api/admin/changelog/${id}`, headers, payload: { date: '2026-11-01', changes: 'x', published: false } });
+    assert.deepEqual(updated.json().changeLogEntry, { id, date: '2026-11-01', changes: 'x', published: false });
     assert.deepEqual((await app.inject({ method: 'GET', url: '/api/changelog' })).json(), []);
+    assert.equal((await app.inject({ method: 'DELETE', url: `/api/admin/changelog/${id}`, headers })).statusCode, 204);
   });
 });
 
@@ -158,5 +171,26 @@ describe('security headers', () => {
     assert.match(String(response.headers['cache-control']), /no-store/);
     const health = await server.app.inject({ method: 'GET', url: '/api/health' });
     assert.deepEqual(health.json(), { status: 'ok' });
+  });
+
+  it('sends the same headers with the HTML pages, and long-term caching only for hashed assets', async () => {
+    const staticDir = mkdtempSync(path.join(tmpdir(), 'agt-static-'));
+    writeFileSync(path.join(staticDir, 'index.html'), '<!doctype html><title>Calendar</title>');
+    writeFileSync(path.join(staticDir, 'admin.html'), '<!doctype html><title>Admin</title>');
+    const server = await createTestServer({ staticDir });
+    servers.push(server);
+    for (const url of ['/', '/admin']) {
+      const response = await server.app.inject({ method: 'GET', url });
+      assert.equal(response.statusCode, 200, url);
+      assert.equal(response.headers['content-security-policy'], CONTENT_SECURITY_POLICY, url);
+      assert.equal(response.headers['x-content-type-options'], 'nosniff', url);
+      assert.equal(response.headers['x-frame-options'], 'DENY', url);
+      assert.equal(response.headers['referrer-policy'], 'strict-origin-when-cross-origin', url);
+      assert.equal(response.headers['cross-origin-opener-policy'], 'same-origin', url);
+      assert.match(String(response.headers['cache-control']), /no-store/, url);
+    }
+    const notFound = await server.app.inject({ method: 'GET', url: '/api/nope' });
+    assert.equal(notFound.statusCode, 404);
+    assert.equal(notFound.json().error, 'not_found');
   });
 });

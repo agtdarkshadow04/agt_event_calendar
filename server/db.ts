@@ -3,12 +3,14 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import type { Database as SqliteDatabase } from 'better-sqlite3';
 import initialSchema from './migrations/0001_initial.sql';
+import recordTimestamps from './migrations/0002_record_timestamps.sql';
 
 export type Db = SqliteDatabase;
 
 /** Numbered plain-SQL migrations. Never edit a released migration; add a new one. */
 export const MIGRATIONS: { version: number; name: string; sql: string }[] = [
   { version: 1, name: '0001_initial', sql: initialSchema },
+  { version: 2, name: '0002_record_timestamps', sql: recordTimestamps },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

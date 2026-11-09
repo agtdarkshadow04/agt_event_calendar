@@ -122,6 +122,19 @@ describe('admin sessions', () => {
     assert.match(String(response.headers['set-cookie']), /Secure/);
   });
 
+  it('rejects and purges expired sessions', async () => {
+    const test = await server();
+    const cookie = await setupAdmin(test);
+    assert.equal((await test.app.inject({ method: 'GET', url: '/api/admin/session', headers: { cookie } })).statusCode, 200);
+    test.context.db.prepare("UPDATE sessions SET expires_at = '2000-01-01T00:00:00.000Z'").run();
+    const expired = await test.app.inject({ method: 'GET', url: '/api/admin/session', headers: { cookie } });
+    assert.equal(expired.statusCode, 401);
+    assert.equal(expired.json().error, 'unauthorized');
+    await test.app.inject({ method: 'POST', url: '/api/admin/login', headers: CSRF, payload: ADMIN });
+    const left = test.context.db.prepare("SELECT count(*) AS n FROM sessions WHERE expires_at < '2001-01-01'").get() as { n: number };
+    assert.equal(left.n, 0, 'expired sessions are deleted when a new session starts');
+  });
+
   it('changes the password and ends other sessions', async () => {
     const test = await server();
     const first = await setupAdmin(test);

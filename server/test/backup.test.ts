@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
 import Database from 'better-sqlite3';
+import { SCHEMA_VERSION } from '../db';
 import { openSafeZip } from '../zip';
 import { CSRF, JPEG, createTestServer, makeZip, multipart, setupAdmin, validEvent } from './helpers';
 import type { TestServer } from './helpers';
@@ -51,7 +52,7 @@ async function seed(test: Awaited<ReturnType<typeof adminServer>>) {
 async function exportBackup(test: Awaited<ReturnType<typeof adminServer>>) {
   const response = await test.app.inject({ method: 'GET', url: '/api/admin/backup', headers: test.headers });
   assert.equal(response.statusCode, 200);
-  assert.match(String(response.headers['content-disposition']), /attachment; filename="agt-calendar-backup-.*\.zip"/);
+  assert.match(String(response.headers['content-disposition']), /attachment; filename="agt-event-calendar-backup-.*\.zip"/);
   return response.rawPayload;
 }
 
@@ -77,7 +78,7 @@ describe('backup export', () => {
     assert.equal(files.get('config.yaml')!.toString(), CONFIG);
 
     const manifest = JSON.parse(files.get('manifest.json')!.toString());
-    assert.equal(manifest.schemaVersion, 1);
+    assert.equal(manifest.schemaVersion, SCHEMA_VERSION);
     assert.equal(manifest.appVersion, 'test');
     assert.ok(Date.parse(manifest.createdAt));
     for (const file of manifest.files) {

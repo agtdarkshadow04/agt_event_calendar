@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { readdirSync } from 'node:fs';
+import { createChallenge, solveChallenge } from 'altcha-lib';
+import { deriveKey } from 'altcha-lib/algorithms/sha';
 import { after, describe, it } from 'node:test';
 import { parseConfigText } from '../config';
 import { detectImageType, validateImage } from '../images';
@@ -84,6 +86,22 @@ describe('public submissions', () => {
     const replay = await submit(test, { altcha: payload });
     assert.equal(replay.statusCode, 400);
     assert.match(replay.json().message, /already used/);
+  });
+
+  it('rejects expired ALTCHA challenges', async () => {
+    const hmacKey = 'a-test-hmac-key-that-is-at-least-32-characters-long';
+    // createTestServer() already opens an `altcha:` block; this line extends it.
+    const test = await server(`  hmacKey: ${hmacKey}\n`);
+    const challenge = await createChallenge({
+      algorithm: 'SHA-256', cost: 1000, deriveKey, hmacSignatureSecret: hmacKey,
+      expiresAt: Math.floor(Date.now() / 1000) - 60,
+    });
+    const solution = await solveChallenge({ challenge, deriveKey });
+    const payload = Buffer.from(JSON.stringify({ challenge, solution })).toString('base64');
+    const response = await submit(test, { altcha: payload });
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.json().error, 'captcha_failed');
+    assert.match(response.json().message, /expired/);
   });
 
   it('rejects submissions on the server when they are turned off in the dashboard', async () => {
@@ -172,7 +190,7 @@ describe('uploaded image checks', () => {
     const images = (await test.app.inject({ method: 'GET', url: '/api/admin/images', headers })).json();
     assert.equal(images.length, 1);
     assert.equal(images[0].referencedBy.length, 1);
-    assert.equal((await test.app.inject({ method: 'DELETE', url: `/api/admin/images/${id}`, headers })).statusCode, 200);
+    assert.equal((await test.app.inject({ method: 'DELETE', url: `/api/admin/images/${id}`, headers })).statusCode, 204);
     assert.equal(readdirSync(test.context.config.uploadsDir).length, 0);
     const events = (await test.app.inject({ method: 'GET', url: '/api/admin/events', headers })).json();
     assert.equal(events[0].coverImageId, null);

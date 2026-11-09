@@ -16,15 +16,30 @@ import { HttpError, readMultipart } from './http';
 import { removeImageFile, validateImage, writeImageFile } from './images';
 import { migrateFromAmplify } from './migration';
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, hashPassword, verifyPassword } from './passwords';
+import { SECURITY, errorResponses } from './openapi';
 import {
-  deleteAllSessions, deleteChangeLog, deleteEvent, deleteHoliday, deleteImageRow, deleteSetting, getAdmin, getEvent,
-  getImage, insertChangeLog, insertEvent, insertHoliday, insertImage, listChangeLog, listEvents, listHolidays,
-  listImages, replaceImageRow, setEventStatus, setSetting, unreferencedImages, updateAdminPassword, updateChangeLog,
-  updateEvent, updateHoliday,
+  deleteAllSessions, deleteChangeLog, deleteEvent, deleteHoliday, deleteImageRow, deleteSetting, getAdmin, getChangeLog,
+  getEvent, getHoliday, getImage, insertChangeLog, insertEvent, insertHoliday, insertImage, listChangeLog, listEvents,
+  listHolidays, listImages, replaceImageRow, setEventStatus, setSetting, unreferencedImages, updateAdminPassword,
+  updateChangeLog, updateEvent, updateHoliday,
 } from './repository';
+import {
+  AdminApiChangeLogEntrySchema, AdminApiEventSchema, AdminApiHolidaySchema, AdminChangeLogResultSchema,
+  AdminEventInputSchema, AdminEventResultSchema, AdminHolidayResultSchema, AdminImageSchema, binaryResponse,
+  ChangeLogInputSchema, EventStatusSchema, HolidayInputSchema, IdParams, ImageResultSchema, MigrationFormSchema,
+  MigrationReportSchema, NoContent, OkSchema, RestoreFormSchema, RestoreReportSchema, SessionSchema, SettingStateSchema,
+  SettingsUpdateSchema,
+} from './schemas';
 
-const IdParams = Type.Object({ id: Type.String({ maxLength: 64 }) });
-const AnyObject = Type.Record(Type.String(), Type.Unknown());
+const ImageFormSchema = Type.Object({
+  file: Type.String({ format: 'binary', description: 'PNG, JPEG, WebP or GIF image (no SVG).' }),
+});
+
+/** OpenAPI metadata shared by admin routes. */
+const read = (operationId: string, tags: string[], summary: string) =>
+  ({ operationId, tags, summary, security: SECURITY.adminRead });
+const write = (operationId: string, tags: string[], summary: string) =>
+  ({ operationId, tags, summary, security: SECURITY.adminWrite });
 
 function notFound(what: string): never {
   throw new HttpError(404, 'not_found', `${what} not found.`);
@@ -54,12 +69,6 @@ function statusFrom(value: unknown, fallback: EventStatus): EventStatus {
   return value as EventStatus;
 }
 
-function publishedFrom(value: unknown): boolean {
-  if (value === undefined) return true;
-  if (typeof value !== 'boolean') throw new HttpError(400, 'invalid_request', 'published must be true or false.');
-  return value;
-}
-
 /** Admin-only API. Every route requires a valid session; mutations also require the CSRF header. */
 export async function registerAdminRoutes(fastify: FastifyInstance, context: AppContext): Promise<void> {
   const app = fastify.withTypeProvider<TypeBoxTypeProvider>();
@@ -72,7 +81,12 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
 
   // ------------------------------------------------------------- account
 
-  app.get('/api/admin/session', async () => ({
+  app.get('/api/admin/session', {
+    schema: {
+      ...read('getSession', ['admin'], 'Returns the signed-in admin and whether the setup password is still set.'),
+      response: { 200: SessionSchema, ...errorResponses },
+    },
+  }, async () => ({
     username: getAdmin(context.db)?.username ?? null,
     setupPasswordStillSet: Boolean(context.setupPassword),
     csrfHeader: CSRF_HEADER,
@@ -80,10 +94,12 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
 
   app.post('/api/admin/password', {
     schema: {
+      ...write('changePassword', ['admin'], 'Changes the admin password and ends all other sessions.'),
       body: Type.Object({
         currentPassword: Type.String({ maxLength: MAX_PASSWORD_LENGTH }),
         newPassword: Type.String({ maxLength: MAX_PASSWORD_LENGTH }),
       }, { additionalProperties: false }),
+      response: { 200: OkSchema, ...errorResponses },
     },
     config: { rateLimit: { max: context.config.rateLimits.login.max, timeWindow: context.config.rateLimits.login.windowMinutes * 60_000 } },
   }, async (request, reply) => {
@@ -92,35 +108,56 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       throw new HttpError(401, 'invalid_credentials', 'The current password is incorrect.');
     }
     if (request.body.newPassword.length < MIN_PASSWORD_LENGTH) {
-      throw new HttpError(400, 'validation_failed', `The new password must have at least ${MIN_PASSWORD_LENGTH} characters.`);
+      throw new HttpError(400, 'validation_failed', `The new password must have at least ${MIN_PASSWORD_LENGTH} characters.`, [
+        { field: 'newPassword', message: `The new password must have at least ${MIN_PASSWORD_LENGTH} characters.` },
+      ]);
     }
     updateAdminPassword(context.db, await hashPassword(request.body.newPassword));
     deleteAllSessions(context.db);
     startSession(context, request, reply);
-    return { ok: true };
+    return { ok: true as const };
   });
 
   // ------------------------------------------------------------- events
 
   app.get('/api/admin/events', {
-    schema: { querystring: Type.Object({ status: Type.Optional(Type.String()) }) },
-  }, async (request) => {
-    const status = request.query.status ? statusFrom(request.query.status, 'published') : null;
-    return listEvents(context.db, status ? [status] : undefined);
-  });
+    schema: {
+      ...read('listAdminEvents', ['events'], 'Lists all events, optionally filtered by status.'),
+      querystring: Type.Object({ status: Type.Optional(EventStatusSchema) }, { additionalProperties: false }),
+      response: { 200: Type.Array(AdminApiEventSchema), ...errorResponses },
+    },
+  }, async (request) => listEvents(context.db, request.query.status ? [request.query.status] : undefined));
 
-  app.get('/api/admin/events/:id', { schema: { params: IdParams } }, async (request) =>
-    getEvent(context.db, checkUuid(request.params.id, 'Event')) ?? notFound('Event'));
+  app.get('/api/admin/events/:id', {
+    schema: {
+      ...read('getAdminEvent', ['events'], 'Returns any event, whatever its status.'),
+      params: IdParams,
+      response: { 200: AdminApiEventSchema, ...errorResponses },
+    },
+  }, async (request) => getEvent(context.db, checkUuid(request.params.id, 'Event')) ?? notFound('Event'));
 
-  app.post('/api/admin/events', { schema: { body: AnyObject } }, async (request, reply) => {
+  app.post('/api/admin/events', {
+    schema: {
+      ...write('createAdminEvent', ['events'], 'Creates an event (unpublished unless a status is given).'),
+      body: AdminEventInputSchema,
+      response: { 201: AdminEventResultSchema, ...errorResponses },
+    },
+  }, async (request, reply) => {
     const result = validateEventInput(request.body);
     if (!result.ok) throw new HttpError(400, 'validation_failed', 'The event is invalid.', result.errors);
     const status = statusFrom(request.body.status, 'unpublished');
     const id = insertEvent(context.db, result.value, { status, coverImageId: coverImageIdFrom(context, request.body) });
-    return reply.status(201).send({ event: getEvent(context.db, id), notices: result.notices });
+    return reply.status(201).send({ event: getEvent(context.db, id)!, notices: result.notices });
   });
 
-  app.put('/api/admin/events/:id', { schema: { params: IdParams, body: AnyObject } }, async (request) => {
+  app.put('/api/admin/events/:id', {
+    schema: {
+      ...write('updateAdminEvent', ['events'], 'Replaces an event; the status changes only when given.'),
+      params: IdParams,
+      body: AdminEventInputSchema,
+      response: { 200: AdminEventResultSchema, ...errorResponses },
+    },
+  }, async (request) => {
     const id = checkUuid(request.params.id, 'Event');
     const existing = getEvent(context.db, id) ?? notFound('Event');
     const result = validateEventInput(request.body);
@@ -130,25 +167,41 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       updateEvent(context.db, id, result.value, coverImageId);
       if (request.body.status !== undefined) setEventStatus(context.db, id, statusFrom(request.body.status, existing.status));
     })();
-    return { event: getEvent(context.db, id), notices: result.notices };
+    return { event: getEvent(context.db, id)!, notices: result.notices };
   });
 
   app.post('/api/admin/events/:id/status', {
-    schema: { params: IdParams, body: Type.Object({ status: Type.String() }, { additionalProperties: false }) },
+    schema: {
+      ...write('setAdminEventStatus', ['events'], 'Publishes, unpublishes, approves or rejects an event.'),
+      params: IdParams,
+      body: Type.Object({ status: EventStatusSchema }, { additionalProperties: false }),
+      response: { 200: AdminEventResultSchema, ...errorResponses },
+    },
   }, async (request) => {
     const id = checkUuid(request.params.id, 'Event');
-    if (!setEventStatus(context.db, id, statusFrom(request.body.status, 'published'))) notFound('Event');
-    return { event: getEvent(context.db, id) };
+    if (!setEventStatus(context.db, id, request.body.status)) notFound('Event');
+    return { event: getEvent(context.db, id)!, notices: [] };
   });
 
-  app.delete('/api/admin/events/:id', { schema: { params: IdParams } }, async (request) => {
+  app.delete('/api/admin/events/:id', {
+    schema: {
+      ...write('deleteAdminEvent', ['events'], 'Deletes an event.'),
+      params: IdParams,
+      response: { 204: NoContent, ...errorResponses },
+    },
+  }, async (request, reply) => {
     if (!deleteEvent(context.db, checkUuid(request.params.id, 'Event'))) notFound('Event');
-    return { ok: true };
+    return reply.status(204).send(null);
   });
 
   // ------------------------------------------------------------- images
 
-  app.get('/api/admin/images', async () => listImages(context.db));
+  app.get('/api/admin/images', {
+    schema: {
+      ...read('listAdminImages', ['images'], 'Lists uploaded images with the events that use them.'),
+      response: { 200: Type.Array(AdminImageSchema), ...errorResponses },
+    },
+  }, async () => listImages(context.db));
 
   const imageUpload = async (request: FastifyRequest) => {
     const maxBytes = setting(context, 'uploads.maxImageBytes');
@@ -158,14 +211,21 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
     const mime = validateImage(file.data, { maxBytes, declaredMime: file.mimeType, fileName: file.fileName });
     return writeImageFile(context.config.uploadsDir, file.data, mime);
   };
-  const uploadLimit = {
+  const uploadConfig = {
     rateLimit: {
       max: context.config.rateLimits.adminUploads.max,
       timeWindow: context.config.rateLimits.adminUploads.windowMinutes * 60_000,
     },
+    multipartBody: ImageFormSchema,
   };
 
-  app.post('/api/admin/images', { config: uploadLimit }, async (request, reply) => {
+  app.post('/api/admin/images', {
+    config: uploadConfig,
+    schema: {
+      ...write('uploadAdminImage', ['images'], 'Uploads an image, checked by its contents.'),
+      response: { 201: ImageResultSchema, ...errorResponses },
+    },
+  }, async (request, reply) => {
     const image = await imageUpload(request);
     try {
       insertImage(context.db, image);
@@ -176,7 +236,14 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
     return reply.status(201).send({ image });
   });
 
-  app.put('/api/admin/images/:id', { schema: { params: IdParams }, config: uploadLimit }, async (request) => {
+  app.put('/api/admin/images/:id', {
+    config: uploadConfig,
+    schema: {
+      ...write('replaceAdminImage', ['images'], 'Replaces the file of an image, keeping its ID.'),
+      params: IdParams,
+      response: { 200: ImageResultSchema, ...errorResponses },
+    },
+  }, async (request) => {
     const id = checkUuid(request.params.id, 'Image');
     const existing = getImage(context.db, id) ?? notFound('Image');
     const replacement = await imageUpload(request);
@@ -187,16 +254,27 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       throw error;
     }
     removeImageFile(context.config.uploadsDir, existing.fileName);
-    return { image: getImage(context.db, id) };
+    return { image: getImage(context.db, id)! };
   });
 
-  app.delete('/api/admin/images/:id', { schema: { params: IdParams } }, async (request) => {
+  app.delete('/api/admin/images/:id', {
+    schema: {
+      ...write('deleteAdminImage', ['images'], 'Deletes an image; events using it lose their cover.'),
+      params: IdParams,
+      response: { 204: NoContent, ...errorResponses },
+    },
+  }, async (request, reply) => {
     const image = deleteImageRow(context.db, checkUuid(request.params.id, 'Image')) ?? notFound('Image');
     removeImageFile(context.config.uploadsDir, image.fileName);
-    return { ok: true };
+    return reply.status(204).send(null);
   });
 
-  app.post('/api/admin/images/cleanup', async () => {
+  app.post('/api/admin/images/cleanup', {
+    schema: {
+      ...write('cleanUpAdminImages', ['images'], 'Deletes every image that no event uses.'),
+      response: { 200: Type.Object({ removed: Type.Integer() }), ...errorResponses },
+    },
+  }, async () => {
     const removed = context.db.transaction(() => {
       const images = unreferencedImages(context.db);
       for (const image of images) deleteImageRow(context.db, image.id);
@@ -208,53 +286,108 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
 
   // ------------------------------------------------------------- national holidays
 
-  app.get('/api/admin/holidays', async () => listHolidays(context.db, false));
+  app.get('/api/admin/holidays', {
+    schema: {
+      ...read('listAdminHolidays', ['holidays'], 'Lists all national holidays.'),
+      response: { 200: Type.Array(AdminApiHolidaySchema), ...errorResponses },
+    },
+  }, async () => listHolidays(context.db, false));
 
-  app.post('/api/admin/holidays', { schema: { body: AnyObject } }, async (request, reply) => {
+  app.post('/api/admin/holidays', {
+    schema: {
+      ...write('createAdminHoliday', ['holidays'], 'Creates a national holiday (published unless stated otherwise).'),
+      body: HolidayInputSchema,
+      response: { 201: AdminHolidayResultSchema, ...errorResponses },
+    },
+  }, async (request, reply) => {
     const result = validateHolidayInput(request.body);
     if (!result.ok) throw new HttpError(400, 'validation_failed', 'The holiday is invalid.', result.errors);
-    const id = insertHoliday(context.db, result.value, publishedFrom(request.body.published));
-    return reply.status(201).send({ id });
+    const id = insertHoliday(context.db, result.value, request.body.published ?? true);
+    return reply.status(201).send({ holiday: getHoliday(context.db, id)!, notices: result.notices });
   });
 
-  app.put('/api/admin/holidays/:id', { schema: { params: IdParams, body: AnyObject } }, async (request) => {
+  app.put('/api/admin/holidays/:id', {
+    schema: {
+      ...write('updateAdminHoliday', ['holidays'], 'Replaces a national holiday.'),
+      params: IdParams,
+      body: HolidayInputSchema,
+      response: { 200: AdminHolidayResultSchema, ...errorResponses },
+    },
+  }, async (request) => {
+    const id = checkUuid(request.params.id, 'Holiday');
     const result = validateHolidayInput(request.body);
     if (!result.ok) throw new HttpError(400, 'validation_failed', 'The holiday is invalid.', result.errors);
-    if (!updateHoliday(context.db, request.params.id, result.value, publishedFrom(request.body.published))) notFound('Holiday');
-    return { ok: true };
+    if (!updateHoliday(context.db, id, result.value, request.body.published ?? true)) notFound('Holiday');
+    return { holiday: getHoliday(context.db, id)!, notices: result.notices };
   });
 
-  app.delete('/api/admin/holidays/:id', { schema: { params: IdParams } }, async (request) => {
-    if (!deleteHoliday(context.db, request.params.id)) notFound('Holiday');
-    return { ok: true };
+  app.delete('/api/admin/holidays/:id', {
+    schema: {
+      ...write('deleteAdminHoliday', ['holidays'], 'Deletes a national holiday.'),
+      params: IdParams,
+      response: { 204: NoContent, ...errorResponses },
+    },
+  }, async (request, reply) => {
+    if (!deleteHoliday(context.db, checkUuid(request.params.id, 'Holiday'))) notFound('Holiday');
+    return reply.status(204).send(null);
   });
 
   // ------------------------------------------------------------- change log
 
-  app.get('/api/admin/changelog', async () => listChangeLog(context.db, false));
+  app.get('/api/admin/changelog', {
+    schema: {
+      ...read('listAdminChangeLog', ['changelog'], 'Lists all change-log entries, newest first.'),
+      response: { 200: Type.Array(AdminApiChangeLogEntrySchema), ...errorResponses },
+    },
+  }, async () => listChangeLog(context.db, false));
 
-  app.post('/api/admin/changelog', { schema: { body: AnyObject } }, async (request, reply) => {
+  app.post('/api/admin/changelog', {
+    schema: {
+      ...write('createAdminChangeLogEntry', ['changelog'], 'Creates a change-log entry (published unless stated otherwise).'),
+      body: ChangeLogInputSchema,
+      response: { 201: AdminChangeLogResultSchema, ...errorResponses },
+    },
+  }, async (request, reply) => {
     const result = validateChangeLogInput(request.body);
     if (!result.ok) throw new HttpError(400, 'validation_failed', 'The change-log entry is invalid.', result.errors);
-    const id = insertChangeLog(context.db, result.value, publishedFrom(request.body.published));
-    return reply.status(201).send({ id });
+    const id = insertChangeLog(context.db, result.value, request.body.published ?? true);
+    return reply.status(201).send({ changeLogEntry: getChangeLog(context.db, id)!, notices: result.notices });
   });
 
-  app.put('/api/admin/changelog/:id', { schema: { params: IdParams, body: AnyObject } }, async (request) => {
+  app.put('/api/admin/changelog/:id', {
+    schema: {
+      ...write('updateAdminChangeLogEntry', ['changelog'], 'Replaces a change-log entry.'),
+      params: IdParams,
+      body: ChangeLogInputSchema,
+      response: { 200: AdminChangeLogResultSchema, ...errorResponses },
+    },
+  }, async (request) => {
+    const id = checkUuid(request.params.id, 'Change-log entry');
     const result = validateChangeLogInput(request.body);
     if (!result.ok) throw new HttpError(400, 'validation_failed', 'The change-log entry is invalid.', result.errors);
-    if (!updateChangeLog(context.db, request.params.id, result.value, publishedFrom(request.body.published))) notFound('Change-log entry');
-    return { ok: true };
+    if (!updateChangeLog(context.db, id, result.value, request.body.published ?? true)) notFound('Change-log entry');
+    return { changeLogEntry: getChangeLog(context.db, id)!, notices: result.notices };
   });
 
-  app.delete('/api/admin/changelog/:id', { schema: { params: IdParams } }, async (request) => {
-    if (!deleteChangeLog(context.db, request.params.id)) notFound('Change-log entry');
-    return { ok: true };
+  app.delete('/api/admin/changelog/:id', {
+    schema: {
+      ...write('deleteAdminChangeLogEntry', ['changelog'], 'Deletes a change-log entry.'),
+      params: IdParams,
+      response: { 204: NoContent, ...errorResponses },
+    },
+  }, async (request, reply) => {
+    if (!deleteChangeLog(context.db, checkUuid(request.params.id, 'Change-log entry'))) notFound('Change-log entry');
+    return reply.status(204).send(null);
   });
 
   // ------------------------------------------------------------- settings
 
-  app.get('/api/admin/settings', async () => settingStates(context));
+  app.get('/api/admin/settings', {
+    schema: {
+      ...read('listSettings', ['admin'], 'Lists dashboard settings with their effective value and source.'),
+      response: { 200: Type.Array(SettingStateSchema), ...errorResponses },
+    },
+  }, async () => settingStates(context));
 
   /**
    * Updates dashboard settings. `null` resets a key to its default. The whole
@@ -262,7 +395,12 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
    * always wins and is enforced here, not only in the UI.
    */
   app.put('/api/admin/settings', {
-    schema: { body: Type.Object({ values: AnyObject }, { additionalProperties: false }) },
+    schema: {
+      ...write('updateSettings', ['admin'],
+        'Changes dashboard settings. Keys defined in config.yaml are rejected with 409 defined_in_config.'),
+      body: SettingsUpdateSchema,
+      response: { 200: Type.Array(SettingStateSchema), ...errorResponses },
+    },
   }, async (request) => {
     const entries = Object.entries(request.body.values);
     for (const [key, value] of entries) {
@@ -287,7 +425,13 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
 
   // ------------------------------------------------------------- Migrate from Amplify
 
-  app.post('/api/admin/migrate', async (request) => {
+  app.post('/api/admin/migrate', {
+    config: { multipartBody: MigrationFormSchema },
+    schema: {
+      ...write('migrateFromAmplify', ['backup'], 'Previews or imports a Migrate from Amplify ZIP.'),
+      response: { 200: MigrationReportSchema, ...errorResponses },
+    },
+  }, async (request) => {
     const form = await readMultipart(request, {
       fileFields: ['zip'],
       maxFileBytes: setting(context, 'migration.maxZipBytes'),
@@ -312,17 +456,30 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
 
   // ------------------------------------------------------------- backup & restore
 
-  app.get('/api/admin/backup', async (request, reply) => {
+  app.get('/api/admin/backup', {
+    schema: {
+      ...read('downloadBackup', ['backup'], 'Downloads a backup ZIP (database, uploads, config.yaml, manifest).'),
+      response: { 200: binaryResponse('The backup ZIP.', ['application/zip']), ...errorResponses },
+    },
+  }, async (request, reply) => {
     const backup = await createBackup(context);
     const stream = createReadStream(backup.path);
     stream.on('close', () => discardBackup(backup.path));
     request.log.info('Backup exported');
     reply.header('Content-Type', 'application/zip');
     reply.header('Content-Disposition', `attachment; filename="${path.basename(backup.fileName)}"`);
-    return reply.send(stream);
+    // A stream is sent as is; the response schema only documents it.
+    return reply.send(stream as unknown as string);
   });
 
-  app.post('/api/admin/restore', async (request, reply) => {
+  app.post('/api/admin/restore', {
+    config: { multipartBody: RestoreFormSchema },
+    schema: {
+      ...write('restoreBackup', ['backup'],
+        'Previews or restores a backup. A restore replaces all data and the admin account, and ends every session.'),
+      response: { 200: RestoreReportSchema, ...errorResponses },
+    },
+  }, async (request, reply) => {
     const form = await readMultipart(request, {
       fileFields: ['backup'],
       maxFileBytes: setting(context, 'migration.maxZipBytes'),
