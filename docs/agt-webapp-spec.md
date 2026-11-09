@@ -687,8 +687,41 @@ All AGT apps MUST look like one family.
   `NMS Futura` (`/NMSFuturaProBook_Kerned.ttf`) for UI text; a monospace stack
   (`ui-monospace, SFMono-Regular, Menlo, monospace`) for data, codes, timestamps and labels in tables;
   `Twemoji Country Flags` (`/fonts/TwemojiCountryFlags.woff2`, `unicode-range: U+1F1E6-1F1FF`, keep its
-  CC BY 4.0 licence file) wherever flags are shown. The fallback stack must render Thai, Chinese, Hindi and
-  Japanese (system fonts), because NMS Futura does not cover them.
+  CC BY 4.0 licence file) wherever flags are shown; `NMS Glyphs Mono` for portal codes (UI-14). The fallback
+  stack must render Thai, Chinese, Hindi and Japanese (system fonts), because NMS Futura does not cover them.
+- **UI-14** Portal codes MUST be displayed as No Man's Sky portal glyphs using the bundled **NMS Glyphs Mono**
+  typeface, copied from the reference implementation (`public/NMS-Glyphs-Mono-fixed2026.ttf`; internal
+  family name `NMS Glyphs`, style `Glyphs-Mono`). The font maps only the characters `0–9` and uppercase
+  `A–F`, one glyph per hexadecimal digit. Rules:
+  - Declare it once and use it only through the `.portal-glyphs` class, never as a general text font:
+
+    ```css
+    @font-face {
+      font-family: 'NMS Glyphs Mono';
+      src: url('/NMS-Glyphs-Mono-fixed2026.ttf') format('truetype');
+      font-display: block; /* never flash the hex digits in a fallback font as if they were glyphs */
+    }
+
+    .portal-glyphs {
+      font-family: 'NMS Glyphs Mono';
+      font-size: 1.5em;
+      line-height: 1;
+      letter-spacing: 0.08em;
+      font-variant-ligatures: none;
+      white-space: nowrap;
+    }
+    ```
+
+  - Render glyphs only for a valid code: exactly 12 hexadecimal digits after trimming and uppercasing
+    (check with a shared `isPortalCode()` in `src/lib/`). Uppercase the code before rendering, because the
+    font has no lowercase characters. Anything else (placeholders such as `TBA`, legacy values) is shown as
+    plain text in the monospace stack, never in the glyph font.
+  - Always show the hexadecimal code as text as well (`.portal-code-value`, monospace stack) next to the
+    glyphs. The glyph element is `aria-hidden="true"` and `translate="no"`, so screen readers and translation
+    tools get the hex text. Copy buttons, share links and exports use the hex text.
+  - Glyphs inherit the text colour (`--agt-orange` by default); do not recolour individual glyphs.
+  - Forms that accept a portal code take hex input in a normal text field and MAY show a live glyph preview
+    using the same class.
 - **UI-4** Headings and button labels are uppercase with wide letter spacing (`0.12em`) and heavy weight;
   body text is sentence case. Headings use `#fff`; body text uses `--text`; secondary text uses `--muted`.
 - **UI-5** Use the official logo `public/AgtOfficialLogo.webp` as the favicon and in the header brand lockup
@@ -1111,7 +1144,8 @@ Use this list to review a new app or a large change. Every item must be true or 
 - [ ] ALTCHA + rate limit + moderation on every anonymous write (§11), or no anonymous writes.
 - [ ] Backup & restore with manifest, preview, pre-restore backup, atomic swap, never writes `config.yaml` (§12).
 - [ ] Two Vite entries; `apiRequest()`; no client caching of server data.
-- [ ] Design tokens verbatim; AGT fonts and logo bundled; reference component classes; responsive to 300 px.
+- [ ] Design tokens verbatim; AGT fonts and logo bundled; portal codes shown in NMS Glyphs Mono with hex
+      text (UI-14); reference component classes; responsive to 300 px.
 - [ ] WCAG 2.2 AA: dialogs via `useDialog`, labelled icon buttons, live regions, font scale.
 - [ ] All 10 locales complete for public and admin strings; no hard-coded UI text.
 - [ ] Docker Compose and systemd installs documented and working; healthcheck; non-root; hardened.
@@ -1131,6 +1165,7 @@ deployments are kept on purpose.
 | API-2 | `DELETE` returns `200 { ok: true }` instead of `204` | To fix together with the OpenAPI work, updating the admin client. |
 | DEP-6..9 | Only Docker Compose installation is documented; no `deploy/` directory | To fix: add the systemd unit, Caddy example and README section. |
 | DOC-2 | `AGENTS.md` has no spec link version or deviations section | To fix. |
+| UI-14 | `NMS-Glyphs-Mono-fixed2026.ttf` is bundled but not declared or used; portal codes are shown only as hex text | To fix: add the `@font-face`, `.portal-glyphs` and `isPortalCode()`, and render glyphs in the event details. |
 
 Calendar-specific features that are **not** part of the standard: Migrate from Amplify (`server/migration.ts`,
 `src/lib/csv.ts`), legacy 4-hex event IDs, bookmarks, the national holidays and change log content types, the
