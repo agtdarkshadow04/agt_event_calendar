@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Markdown } from './Markdown';
+import { PortalGlyphs } from './PortalGlyphs';
 import { BookmarkIcon, ExternalLinkIcon, ShareIcon, XIcon } from './Icons';
 import { formatAtUtcOffset } from '../lib/date';
 import { buildGlyphToolUrl, withEventId } from '../lib/urls';
@@ -321,6 +322,7 @@ export function EventModal({
               <div className="detail-field">
                 <dt>{translations.portalCode}</dt>
                 <dd className="monospace portal-code">
+                  <PortalGlyphs code={event.portalCode} />
                   <span className="portal-code-value">{event.portalCode}</span>
                   <a
                     className="portal-link"

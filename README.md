@@ -2,11 +2,11 @@
 
 > **AI Disclosure:** This software was created using generative AI. Its functionality has been verified by human review.
 
-AGT Event Calendar is a self-hosted calendar for events hosted by the Alliance of Galactic Travellers and related No Man's Sky communities. It runs completely locally with **Docker Compose**: a Fastify server with a SQLite database serves the React calendar, an in-app event submission form with a moderation queue, and an admin dashboard.
+AGT Event Calendar is a self-hosted calendar for events hosted by the Alliance of Galactic Travellers and related No Man's Sky communities. It runs completely locally, with **Docker Compose** or as a **systemd service** on Ubuntu/Debian: a Fastify server with a SQLite database serves the React calendar, an in-app event submission form with a moderation queue, and an admin dashboard.
 
 - No cloud services, no third-party CDNs, and no outbound requests from the server.
 - The visitor's browser loads only files served by the app. The one exception is external images that authors reference in event descriptions (see [Content safety](#content-safety)).
-- All data (events, national holidays, change log, uploaded images) lives in one Docker volume.
+- All data (events, national holidays, change log, uploaded images) lives in one data directory: a Docker volume, or `/var/lib/agt-event-calendar` for a local installation.
 
 ## Contents
 
@@ -21,6 +21,10 @@ AGT Event Calendar is a self-hosted calendar for events hosted by the Alliance o
 - [Troubleshooting](#troubleshooting)
 
 ## Installation
+
+Choose one method: [Docker Compose](#docker-compose) (recommended) or a [local installation](#local-installation-ubuntudebian) on Ubuntu 24.04 LTS or Debian 12/13.
+
+### Docker Compose
 
 Requirements: Docker with the Compose plugin.
 
@@ -50,22 +54,95 @@ What `docker-compose.yml` sets up:
 | Healthcheck | `GET /api/health`. |
 | User | The container runs as the non-root `node` user with a read-only root filesystem. |
 
+### Local installation (Ubuntu/Debian)
+
+The app runs as a hardened systemd service under its own system user. Paths:
+
+| Path | Contents |
+| --- | --- |
+| `/opt/agt-event-calendar` | The code and the built app |
+| `/etc/agt-event-calendar/config.yaml` | Configuration |
+| `/etc/agt-event-calendar/.env` | Secrets and bootstrap values (`AGT_SETUP_PASSWORD`), readable only by root |
+| `/var/lib/agt-event-calendar` | Database, uploaded images and automatic pre-restore backups (created by systemd) |
+
+1. Install Node.js 24 from NodeSource, plus Git and the build tools for the SQLite driver:
+
+   ```bash
+   curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource_setup.sh
+   sudo -E bash /tmp/nodesource_setup.sh
+   sudo apt-get install -y nodejs git build-essential python3
+   ```
+
+2. Create the system user, then download and build the app:
+
+   ```bash
+   sudo useradd --system --home-dir /var/lib/agt-event-calendar --shell /usr/sbin/nologin agt-event-calendar
+   sudo git clone https://github.com/Folfchie/agt_event_calendar.git /opt/agt-event-calendar
+   cd /opt/agt-event-calendar
+   sudo npm ci
+   sudo npm run build
+   sudo npm prune --omit=dev
+   ```
+
+3. Create the configuration:
+
+   ```bash
+   sudo mkdir -p /etc/agt-event-calendar
+   sudo cp config.example.yaml /etc/agt-event-calendar/config.yaml
+   sudo cp .env.example /etc/agt-event-calendar/.env
+   sudo chmod 600 /etc/agt-event-calendar/.env
+   ```
+
+   Edit `/etc/agt-event-calendar/config.yaml` and set the data directory (the service can only write there):
+
+   ```yaml
+   storage:
+     dataDir: /var/lib/agt-event-calendar
+   ```
+
+   Edit `/etc/agt-event-calendar/.env` and set a temporary `AGT_SETUP_PASSWORD` (see [First run](#first-run)).
+
+4. Install and start the service:
+
+   ```bash
+   sudo cp deploy/agt-event-calendar.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now agt-event-calendar
+   ```
+
+The calendar is served over plain HTTP on port 8080: `http://localhost:8080/`, and the admin dashboard at `http://localhost:8080/admin`. Logs: `journalctl -u agt-event-calendar`.
+
 ### TLS and reverse proxies
 
 The app serves **plain HTTP only**; TLS is up to you. Put it behind your own TLS-terminating reverse proxy (Caddy, nginx, Traefik, …) and set `server.trustProxy` in `config.yaml` (to `true`, or to your proxy's address) so client IPs and HTTPS are detected. With `session.secureCookie: auto` (the default), the admin session cookie is then marked `Secure` automatically for HTTPS requests.
 
+[`deploy/Caddyfile.example`](deploy/Caddyfile.example) is a complete Caddy configuration, including automatic certificates. When the proxy runs on the same host as a local installation, also set `server.host: 127.0.0.1` so the app is reachable only through the proxy. With Docker, publish the port on the loopback interface instead (`"127.0.0.1:8080:8080"` in `docker-compose.yml`).
+
 ### Upgrading
+
+Take a backup first (see [Backup & restore](#backup--restore)). Database migrations run automatically at startup.
+
+Docker Compose:
 
 ```bash
 git pull
 docker compose up -d --build
 ```
 
-Database migrations run automatically at startup. Take a backup first (see [Backup & restore](#backup--restore)).
+Local installation:
+
+```bash
+cd /opt/agt-event-calendar
+sudo git pull
+sudo npm ci
+sudo npm run build
+sudo npm prune --omit=dev
+sudo systemctl restart agt-event-calendar
+```
 
 ## First run
 
-1. Set a temporary setup password in `.env`:
+1. Set a temporary setup password in `.env` (`/etc/agt-event-calendar/.env` for a local installation):
 
    ```dotenv
    AGT_SETUP_PASSWORD=some-long-random-value
@@ -73,7 +150,7 @@ Database migrations run automatically at startup. Take a backup first (see [Back
 
 2. Start the app and open `/admin`. Because no admin account exists yet, the dashboard shows a setup screen.
 3. Enter the setup password, then choose the admin **username** and a **new** admin password (at least 12 characters). The setup password does not become the admin password and cannot be reused as it.
-4. **Remove `AGT_SETUP_PASSWORD` from `.env` and restart** (`docker compose up -d`).
+4. **Remove `AGT_SETUP_PASSWORD` from `.env` and restart**: `docker compose up -d` with Docker, or `sudo systemctl restart agt-event-calendar` for a local installation.
 
 The setup password is used **only on first run**. Once the admin account exists it is ignored permanently and the setup endpoint is disabled, even if the variable is still set. While it is still set, the server logs a warning at every startup and the dashboard shows a reminder to remove it. If no admin exists and the variable is unset or empty, setup is refused with a message telling you to set it and restart.
 
@@ -83,8 +160,10 @@ There is exactly one admin account. Its password is stored only as a salted one-
 
 Configuration comes from two places:
 
-- **`config.yaml`** (mounted read-only) for everything that is not secret. It is validated at startup against a schema: an invalid value or an unknown key stops the server with an error naming the bad key. A missing file means "all defaults".
+- **`config.yaml`** (mounted read-only with Docker; `/etc/agt-event-calendar/config.yaml` for a local installation) for everything that is not secret. It is validated at startup against a schema: an invalid value or an unknown key stops the server with an error naming the bad key. A missing file means "all defaults".
 - **`.env`** for secrets and bootstrap values only: `AGT_SETUP_PASSWORD`. `.env` is git-ignored and never included in backups.
+
+The variable names (`AGT_SETUP_PASSWORD`, `AGT_CONFIG_FILE`) predate the AGT web app naming scheme (`AGT_<APP>_…`) and are kept so that existing installations keep working.
 
 `config.example.yaml` documents every key with its default.
 
@@ -219,7 +298,7 @@ ZIPs with absolute paths, `..` segments or symbolic links, and ZIPs that exceed 
 
 ### Backup
 
-**Backup & restore → Download backup** produces `agt-calendar-backup-<timestamp>.zip` containing:
+**Backup & restore → Download backup** produces `agt-event-calendar-backup-<timestamp>.zip` containing:
 
 - `database.sqlite`: a consistent snapshot made with SQLite's online backup (sessions are removed),
 - `uploads/`: all uploaded images,
@@ -232,15 +311,22 @@ ZIPs with absolute paths, `..` segments or symbolic links, and ZIPs that exceed 
 
 Upload a backup under **Backup & restore → Restore** and review the preview. Before anything is replaced, the server checks the manifest checksums, that the archive contains only expected paths and is within the size limits, that the database passes `PRAGMA integrity_check` and has the expected schema (older schema versions are upgraded; newer ones are refused), and that every image passes the image checks.
 
-Restoring replaces the database, uploads and dashboard settings, **including the admin account**, and signs you out. An automatic backup of the current state is saved first to `/app/data/backups/pre-restore-backup-<timestamp>.zip`, and files are swapped so that a failed restore leaves the instance unchanged. Dashboard settings in the backup for keys that `config.yaml` now defines are ignored and listed in the report.
+Restoring replaces the database, uploads and dashboard settings, **including the admin account**, and signs you out. An automatic backup of the current state is saved first to `backups/pre-restore-backup-<timestamp>.zip` in the data directory (`/app/data` with Docker, `/var/lib/agt-event-calendar` for a local installation), and files are swapped so that a failed restore leaves the instance unchanged. Dashboard settings in the backup for keys that `config.yaml` now defines are ignored and listed in the report.
 
 ### Restoring `config.yaml` by hand
 
 The app **never restores `config.yaml`**: it is mounted read-only, and restoring it would let a backup override the config-file-wins rule. When a backup contains one, the preview says so, shows how it differs from the current file, and offers it for download. To use it:
 
 ```bash
-unzip -p agt-calendar-backup-<timestamp>.zip config.yaml > config.yaml
+unzip -p agt-event-calendar-backup-<timestamp>.zip config.yaml > config.yaml
 docker compose up -d --force-recreate
+```
+
+For a local installation:
+
+```bash
+sudo sh -c 'unzip -p agt-event-calendar-backup-<timestamp>.zip config.yaml > /etc/agt-event-calendar/config.yaml'
+sudo systemctl restart agt-event-calendar
 ```
 
 ## Content safety
@@ -251,7 +337,7 @@ The goal: content from submissions, dashboard edits, migrated files or restored 
 - **External images** written with Markdown image syntax (`![alt](https://…)`) are rendered. The **visitor's browser loads them directly** from the image host, which can therefore see visitors' IP addresses; they are requested without a referrer and lazily, and a broken image does not break the description. The server never fetches, proxies or caches them, and they are not included in backups. Use `https://` image URLs: pages served over HTTPS block or upgrade `http://` images.
 - **Uploaded images** must be PNG, JPEG, WebP or GIF, checked by their actual contents (magic bytes); a declared type or file extension that doesn't match the contents is rejected. **SVG uploads are not supported**, because SVG can contain scripts. The limit is **10 MB** per image, enforced while the upload streams. Files are stored under random server-generated names and served with the detected `Content-Type` and `X-Content-Type-Options: nosniff`.
 - **Content-Security-Policy:** every response carries a CSP that allows scripts only from the app itself (`script-src 'self'`; `object-src 'none'`; `frame-ancestors 'none'`). Images may come from anywhere. The captcha's proof-of-work runs in a bundled same-origin worker.
-- **Bundled assets:** all fonts and scripts are served by the app. The country-flag font is bundled from Twemoji (CC BY 4.0, see `public/fonts/TwemojiCountryFlags-LICENSE.md`).
+- **Bundled assets:** all fonts and scripts are served by the app. The country-flag font is bundled from Twemoji (CC BY 4.0, see `public/fonts/TwemojiCountryFlags-LICENSE.md`). Portal codes are drawn as portal glyphs with the bundled NMS Glyphs Mono font, next to the hexadecimal code.
 
 ## Development
 
@@ -266,6 +352,10 @@ npm run dev          # Vite dev server with hot reload; proxies /api to port 808
 
 For local development, start the API with a setup password, for example `AGT_SETUP_PASSWORD=dev-setup-password npm run dev:server`.
 
+The app follows the [AGT Web Application Specification](docs/agt-webapp-spec.md); [`AGENTS.md`](AGENTS.md) is the guide for AI coding agents and lists where the app deviates from the spec.
+
+**API:** the REST API is described by an OpenAPI 3.1 document generated from the route schemas and served at `/api/openapi.json`. Admin routes need the session cookie from `POST /api/admin/login`; state-changing admin, setup and login requests also need the header `x-agt-request: 1`.
+
 | Command | Purpose |
 | --- | --- |
 | `npm run lint` | Strict TypeScript check of the client, server and tests. |
@@ -277,7 +367,9 @@ Project layout:
 
 | Path | Purpose |
 | --- | --- |
-| `server/` | Fastify server: config, SQLite migrations (`server/migrations/*.sql`), auth, routes, Migrate from Amplify, backup & restore |
+| `server/` | Fastify server: config, SQLite migrations (`server/migrations/*.sql`), auth, routes, OpenAPI (`openapi.ts`, `schemas.ts`), Migrate from Amplify, backup & restore |
+| `deploy/` | systemd unit and Caddy example for local installations |
+| `docs/agt-webapp-spec.md` | The AGT Web Application Specification |
 | `server/test/` | Server tests and the reference migration fixture (`fixtures/amplify-migration/`) |
 | `src/` | Public calendar (React) |
 | `src/admin/` | Admin dashboard (separate Vite entry, `admin.html`) |
@@ -288,19 +380,27 @@ Project layout:
 
 ### The server refuses to start
 
-Read the log (`docker compose logs calendar`). An invalid `config.yaml` is reported with the offending key, for example `Invalid config.yaml: server.prot: Unexpected property`.
+Read the log: `docker compose logs calendar` with Docker, or `journalctl -u agt-event-calendar` for a local installation. An invalid `config.yaml` is reported with the offending key, for example `Invalid config.yaml: server.prot: Unexpected property`.
 
 ### Setup says AGT_SETUP_PASSWORD is not set
 
-Set it in `.env` and restart with `docker compose up -d` so the container picks it up.
+Set it in `.env` and restart so the app picks it up: `docker compose up -d` with Docker, or `sudo systemctl restart agt-event-calendar` for a local installation.
 
 ### I am locked out of the admin account
 
-Restore a backup that contains a known admin account. Otherwise stop the app, open the database in the `calendar-data` volume with the `sqlite3` command-line tool and run `DELETE FROM admin; DELETE FROM sessions;`, then set `AGT_SETUP_PASSWORD` and start the app again to run first-run setup.
+Restore a backup that contains a known admin account. Otherwise stop the app, open the database (in the `calendar-data` volume with Docker, or `/var/lib/agt-event-calendar/agt-calendar.sqlite` for a local installation) with the `sqlite3` command-line tool and run `DELETE FROM admin; DELETE FROM sessions;`, then set `AGT_SETUP_PASSWORD` and start the app again to run first-run setup.
 
 ### Submissions are rejected
 
 Check whether submissions are turned off (**Settings → `submissions.enabled`**, or in `config.yaml`), whether the rate limit was reached, and whether the captcha completed.
+
+### Requests are rejected with "Too many requests"
+
+Logins, setup attempts, admin uploads and submissions are rate limited per client. Wait for the time given in the message, or raise the limits under `rateLimits` (or `submissions.rateLimit`) in `config.yaml`. Behind a reverse proxy, set `server.trustProxy`; otherwise every visitor appears to come from the proxy's address and shares one limit.
+
+### HTTPS, the admin cookie or client IPs behave wrongly behind a proxy
+
+Set `server.trustProxy` to `true` or to the proxy's address, so the app sees the real client IP and that the request used HTTPS. With `session.secureCookie: auto`, the admin cookie is then marked `Secure` for HTTPS requests. If you can't sign in over plain HTTP, check that `session.secureCookie` is not forced to `true`.
 
 ### An external image in a description does not appear
 

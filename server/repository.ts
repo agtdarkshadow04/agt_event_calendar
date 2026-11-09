@@ -146,6 +146,11 @@ export function listHolidays(db: Db, publishedOnly: boolean): AdminApiHoliday[] 
   ).all() as HolidayRow[]).map(toHoliday);
 }
 
+export function getHoliday(db: Db, id: string): AdminApiHoliday | null {
+  const row = db.prepare('SELECT * FROM national_holidays WHERE id = ?').get(id) as HolidayRow | undefined;
+  return row ? toHoliday(row) : null;
+}
+
 export function holidayExists(db: Db, input: HolidayInput): boolean {
   return db.prepare(
     'SELECT 1 FROM national_holidays WHERE name = ? AND civilization = ? AND date = ? AND type = ?',
@@ -173,10 +178,19 @@ export function deleteHoliday(db: Db, id: string): boolean {
 
 interface ChangeLogRow { id: string; date: string; changes: string; published: number }
 
+const toChangeLog = (row: ChangeLogRow): AdminApiChangeLogEntry => ({
+  id: row.id, date: row.date, changes: row.changes, published: row.published === 1,
+});
+
 export function listChangeLog(db: Db, publishedOnly: boolean): AdminApiChangeLogEntry[] {
   return (db.prepare(
     `SELECT * FROM changelog ${publishedOnly ? 'WHERE published = 1' : ''} ORDER BY date DESC, created_at DESC`,
-  ).all() as ChangeLogRow[]).map((row) => ({ id: row.id, date: row.date, changes: row.changes, published: row.published === 1 }));
+  ).all() as ChangeLogRow[]).map(toChangeLog);
+}
+
+export function getChangeLog(db: Db, id: string): AdminApiChangeLogEntry | null {
+  const row = db.prepare('SELECT * FROM changelog WHERE id = ?').get(id) as ChangeLogRow | undefined;
+  return row ? toChangeLog(row) : null;
 }
 
 export function insertChangeLog(db: Db, input: ChangeLogInput, published: boolean): string {
@@ -198,15 +212,18 @@ export function deleteChangeLog(db: Db, id: string): boolean {
 
 // ---------------------------------------------------------------- images
 
-interface ImageRow { id: string; file_name: string; mime_type: ImageRecord['mimeType']; size_bytes: number; sha256: string; created_at: string }
+interface ImageRow {
+  id: string; file_name: string; mime_type: ImageRecord['mimeType']; size_bytes: number; sha256: string; created_at: string; updated_at: string;
+}
 
 const toImage = (row: ImageRow): ImageRecord => ({
-  id: row.id, fileName: row.file_name, mimeType: row.mime_type, sizeBytes: row.size_bytes, sha256: row.sha256, createdAt: row.created_at,
+  id: row.id, fileName: row.file_name, mimeType: row.mime_type, sizeBytes: row.size_bytes, sha256: row.sha256,
+  createdAt: row.created_at, updatedAt: row.updated_at,
 });
 
 export function insertImage(db: Db, image: ImageRecord): void {
-  db.prepare('INSERT INTO images (id, file_name, mime_type, size_bytes, sha256, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(image.id, image.fileName, image.mimeType, image.sizeBytes, image.sha256, image.createdAt);
+  db.prepare('INSERT INTO images (id, file_name, mime_type, size_bytes, sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(image.id, image.fileName, image.mimeType, image.sizeBytes, image.sha256, image.createdAt, image.updatedAt);
 }
 
 export function getImage(db: Db, id: string): ImageRecord | null {
@@ -226,8 +243,8 @@ export function listImages(db: Db): (ImageRecord & { referencedBy: { id: string;
 
 /** Points an image row at a new file (used when an admin replaces an image). */
 export function replaceImageRow(db: Db, id: string, replacement: ImageRecord): void {
-  db.prepare('UPDATE images SET file_name = ?, mime_type = ?, size_bytes = ?, sha256 = ?, created_at = ? WHERE id = ?')
-    .run(replacement.fileName, replacement.mimeType, replacement.sizeBytes, replacement.sha256, replacement.createdAt, id);
+  db.prepare('UPDATE images SET file_name = ?, mime_type = ?, size_bytes = ?, sha256 = ?, updated_at = ? WHERE id = ?')
+    .run(replacement.fileName, replacement.mimeType, replacement.sizeBytes, replacement.sha256, replacement.updatedAt, id);
 }
 
 export function deleteImageRow(db: Db, id: string): ImageRecord | null {
@@ -259,9 +276,10 @@ export function getSettingRows(db: Db): Map<string, unknown> {
 }
 
 export function setSetting(db: Db, key: string, value: unknown): void {
-  db.prepare(`INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+  const timestamp = now();
+  db.prepare(`INSERT INTO settings (key, value, created_at, updated_at) VALUES (?, ?, ?, ?)
     ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
-    .run(key, JSON.stringify(value), now());
+    .run(key, JSON.stringify(value), timestamp, timestamp);
 }
 
 export function deleteSetting(db: Db, key: string): void {
@@ -311,7 +329,9 @@ export function deleteAllSessions(db: Db): void {
 // ---------------------------------------------------------------- secrets & ALTCHA replay protection
 
 export function getOrCreateSecret(db: Db, name: string, create: () => string): string {
-  db.prepare('INSERT OR IGNORE INTO app_secrets (name, value) VALUES (?, ?)').run(name, create());
+  const timestamp = now();
+  db.prepare('INSERT OR IGNORE INTO app_secrets (name, value, created_at, updated_at) VALUES (?, ?, ?, ?)')
+    .run(name, create(), timestamp, timestamp);
   return (db.prepare('SELECT value FROM app_secrets WHERE name = ?').get(name) as { value: string }).value;
 }
 

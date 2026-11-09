@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { getTranslations } from '../translations';
 import {
+  isPortalCode,
   isUuidV4,
   normalizeEventId,
+  portalGlyphCode,
   splitChanges,
   validateAgtUsername,
   validateChangeLogInput,
@@ -76,6 +78,21 @@ describe('validateEventInput', () => {
     const result = validateEventInput({ ...valid, portalCode: 'x' }, getTranslations('fr'));
     assert.equal(result.ok, false);
     if (!result.ok) assert.match(result.errors[0].message, /12/);
+  });
+});
+
+describe('portal codes as glyphs', () => {
+  it('accepts exactly 12 hexadecimal digits, uppercased and trimmed', () => {
+    assert.equal(portalGlyphCode(' 0123abcd4567 '), '0123ABCD4567');
+    assert.equal(portalGlyphCode('FFFFFFFFFFFF'), 'FFFFFFFFFFFF');
+    assert.equal(isPortalCode('000000000000'), true);
+  });
+
+  it('rejects placeholders and codes the glyph font cannot draw', () => {
+    for (const value of ['TBA', '', '0123ABCD456', '0123ABCD45678', '0123ABCD456G', 'ZZZZZZZZZZZZ', '0123 ABCD 4567']) {
+      assert.equal(portalGlyphCode(value), null, value);
+      assert.equal(isPortalCode(value), false, value);
+    }
   });
 });
 

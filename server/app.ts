@@ -16,6 +16,11 @@ import { createAltchaChallenge, verifyAltchaPayload } from './altcha';
 import type { AppContext } from './context';
 import { setting } from './context';
 import { HttpError, readMultipart } from './http';
+import { SECURITY, errorResponses, registerOpenApi } from './openapi';
+import {
+  AltchaChallengeSchema, ApiChangeLogEntrySchema, ApiEventSchema, ApiHolidaySchema, OkSchema,
+  PublicSettingsSchema, SetupStatusSchema, SubmissionFormSchema, SubmissionResultSchema, UsernameSchema, binaryResponse,
+} from './schemas';
 import { endSession, hasValidSession, requireCsrfHeader, startSession } from './session';
 import { ImageRejectedError, removeImageFile, validateImage, writeImageFile } from './images';
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, hashPassword, secretsEqual, verifyPassword } from './passwords';
@@ -55,24 +60,6 @@ export interface BuildOptions {
   staticDir?: string;
 }
 
-const ApiEventSchema = Type.Object({
-  id: Type.String(),
-  legacyId: Type.Union([Type.String(), Type.Null()]),
-  name: Type.String(),
-  start: Type.String(),
-  end: Type.Union([Type.String(), Type.Null()]),
-  civilization: Type.Union([Type.String(), Type.Null()]),
-  type: Type.String(),
-  description: Type.Union([Type.String(), Type.Null()]),
-  coverImageId: Type.Union([Type.String(), Type.Null()]),
-  links: Type.Array(Type.String()),
-  galaxy: Type.String(),
-  region: Type.String(),
-  system: Type.String(),
-  planet: Type.Union([Type.String(), Type.Null()]),
-  portalCode: Type.String(),
-}, { additionalProperties: false });
-
 /** Public event shape; the response schema also strips status and submitter fields. */
 function toPublicEvent(event: ApiEvent): ApiEvent {
   return {
@@ -109,6 +96,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     bodyLimit: 2 * 1024 * 1024,
   }).withTypeProvider<TypeBoxTypeProvider>();
 
+  await registerOpenApi(app, context.version);
   await app.register(fastifyCookie);
   await app.register(fastifyMultipart, { throwFileSizeLimit: true });
   await app.register(fastifyRateLimit, {
@@ -163,18 +151,42 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
 
   // ------------------------------------------------------------- public API
 
-  app.get('/api/health', async () => {
+  app.get('/api/health', {
+    schema: {
+      operationId: 'getHealth', tags: ['public'], summary: 'Checks that the server and database respond.',
+      security: SECURITY.public,
+      response: { 200: Type.Object({ status: Type.Literal('ok') }), ...errorResponses },
+    },
+  }, async () => {
     context.db.prepare('SELECT 1').get();
-    return { status: 'ok' };
+    return { status: 'ok' as const };
   });
 
-  app.get('/api/settings/public', async () => publicSettings(context));
+  app.get('/api/settings/public', {
+    schema: {
+      operationId: 'getPublicSettings', tags: ['public'], summary: 'Returns the settings the public calendar needs.',
+      security: SECURITY.public,
+      response: { 200: PublicSettingsSchema, ...errorResponses },
+    },
+  }, async () => publicSettings(context));
 
-  app.get('/api/events', { schema: { response: { 200: Type.Array(ApiEventSchema) } } }, async () =>
+  app.get('/api/events', {
+    schema: {
+      operationId: 'listEvents', tags: ['public'], summary: 'Lists published events.',
+      security: SECURITY.public,
+      response: { 200: Type.Array(ApiEventSchema), ...errorResponses },
+    },
+  }, async () =>
     listEvents(context.db, ['published']).map(toPublicEvent));
 
   app.get('/api/events/:id', {
-    schema: { params: Type.Object({ id: Type.String({ maxLength: 64 }) }), response: { 200: ApiEventSchema } },
+    schema: {
+      operationId: 'getEvent', tags: ['public'],
+      summary: 'Returns a published event by UUID or by its legacy 4-hex ID.',
+      security: SECURITY.public,
+      params: Type.Object({ id: Type.String({ maxLength: 64 }) }, { additionalProperties: false }),
+      response: { 200: ApiEventSchema, ...errorResponses },
+    },
   }, async (request) => {
     const { id } = request.params;
     const event = isUuidV4(id) ? getEvent(context.db, id) : isLegacyEventId(id) ? getEventByLegacyId(context.db, id) : null;
@@ -182,14 +194,35 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     return toPublicEvent(event);
   });
 
-  app.get('/api/holidays', async () =>
+  app.get('/api/holidays', {
+    schema: {
+      operationId: 'listHolidays', tags: ['public'], summary: 'Lists published national holidays.',
+      security: SECURITY.public,
+      response: { 200: Type.Array(ApiHolidaySchema), ...errorResponses },
+    },
+  }, async () =>
     listHolidays(context.db, true).map(({ published: _published, ...holiday }) => holiday));
 
-  app.get('/api/changelog', async () =>
+  app.get('/api/changelog', {
+    schema: {
+      operationId: 'listChangeLog', tags: ['public'], summary: 'Lists published change-log entries, newest first.',
+      security: SECURITY.public,
+      response: { 200: Type.Array(ApiChangeLogEntrySchema), ...errorResponses },
+    },
+  }, async () =>
     listChangeLog(context.db, true).map(({ published: _published, ...entry }) => entry));
 
   app.get('/api/images/:id', {
-    schema: { params: Type.Object({ id: Type.String({ maxLength: 64 }) }) },
+    schema: {
+      operationId: 'getImage', tags: ['images'],
+      summary: 'Returns an uploaded image. Images of unpublished events are visible only to the admin.',
+      security: SECURITY.public,
+      params: Type.Object({ id: Type.String({ maxLength: 64 }) }, { additionalProperties: false }),
+      response: {
+        200: binaryResponse('The image file.', ['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+        ...errorResponses,
+      },
+    },
   }, async (request, reply) => {
     const image = isUuidV4(request.params.id) ? getImage(context.db, request.params.id) : null;
     const visible = image && (
@@ -202,7 +235,8 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     reply.header('Content-Length', image.sizeBytes);
     reply.header('Content-Disposition', 'inline');
     reply.header('Cache-Control', 'private, no-cache');
-    return reply.send(createReadStream(filePath));
+    // A stream is sent as is; the response schema only documents it.
+    return reply.send(createReadStream(filePath) as unknown as string);
   });
 
   // ------------------------------------------------------------- submissions
@@ -214,16 +248,32 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     }
   };
 
-  app.get('/api/altcha/challenge', { config: rateLimit(60, 1) }, async () => {
+  app.get('/api/altcha/challenge', {
+    config: rateLimit(60, 1),
+    schema: {
+      operationId: 'getAltchaChallenge', tags: ['submissions'], summary: 'Issues an ALTCHA proof-of-work challenge.',
+      security: SECURITY.public,
+      response: { 200: AltchaChallengeSchema, ...errorResponses },
+    },
+  }, async () => {
     assertSubmissionsOpen();
     return createAltchaChallenge(context);
   });
 
   app.post('/api/submissions', {
-    config: rateLimit(
-      () => setting(context, 'submissions.rateLimit.max'),
-      () => setting(context, 'submissions.rateLimit.windowMinutes'),
-    ),
+    config: {
+      ...rateLimit(
+        () => setting(context, 'submissions.rateLimit.max'),
+        () => setting(context, 'submissions.rateLimit.windowMinutes'),
+      ),
+      multipartBody: SubmissionFormSchema,
+    },
+    schema: {
+      operationId: 'submitEvent', tags: ['submissions'],
+      summary: 'Submits an event for moderation. Requires a solved ALTCHA challenge.',
+      security: SECURITY.public,
+      response: { 201: SubmissionResultSchema, ...errorResponses },
+    },
   }, async (request, reply) => {
     assertSubmissionsOpen();
     const maxImageBytes = setting(context, 'uploads.maxImageBytes');
@@ -269,7 +319,14 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
 
   // ------------------------------------------------------------- first-run setup & auth
 
-  app.get('/api/setup/status', async () => ({
+  app.get('/api/setup/status', {
+    schema: {
+      operationId: 'getSetupStatus', tags: ['auth'],
+      summary: 'Tells whether the admin account exists and whether first-run setup is possible.',
+      security: SECURITY.public,
+      response: { 200: SetupStatusSchema, ...errorResponses },
+    },
+  }, async () => ({
     adminExists: getAdmin(context.db) !== null,
     setupPasswordConfigured: Boolean(context.setupPassword),
   }));
@@ -277,6 +334,10 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
   app.post('/api/setup', {
     config: rateLimit(context.config.rateLimits.setup.max, context.config.rateLimits.setup.windowMinutes),
     schema: {
+      operationId: 'setupAdmin', tags: ['auth'],
+      summary: 'First-run setup: creates the single admin account with the setup password from the environment.',
+      security: SECURITY.csrf,
+      response: { 201: UsernameSchema, ...errorResponses },
       body: Type.Object({
         setupPassword: Type.String({ maxLength: MAX_PASSWORD_LENGTH }),
         username: Type.String({ maxLength: 64 }),
@@ -318,10 +379,13 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
   app.post('/api/admin/login', {
     config: rateLimit(context.config.rateLimits.login.max, context.config.rateLimits.login.windowMinutes),
     schema: {
+      operationId: 'login', tags: ['auth'], summary: 'Signs the admin in and sets the session cookie.',
+      security: SECURITY.csrf,
       body: Type.Object({
         username: Type.String({ maxLength: 64 }),
         password: Type.String({ maxLength: MAX_PASSWORD_LENGTH }),
       }, { additionalProperties: false }),
+      response: { 200: UsernameSchema, ...errorResponses },
     },
   }, async (request, reply) => {
     requireCsrfHeader(request);
@@ -335,10 +399,16 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     return { username: admin.username };
   });
 
-  app.post('/api/admin/logout', async (request, reply) => {
+  app.post('/api/admin/logout', {
+    schema: {
+      operationId: 'logout', tags: ['auth'], summary: 'Ends the current admin session.',
+      security: SECURITY.csrf,
+      response: { 200: OkSchema, ...errorResponses },
+    },
+  }, async (request, reply) => {
     requireCsrfHeader(request);
     endSession(context, request, reply);
-    return { ok: true };
+    return { ok: true as const };
   });
 
   await app.register(async (admin) => registerAdminRoutes(admin, context));

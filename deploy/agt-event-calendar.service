@@ -1,0 +1,43 @@
+# systemd unit for a local (non-Docker) installation of the AGT Event Calendar.
+# Install: sudo cp deploy/agt-event-calendar.service /etc/systemd/system/
+# See "Local installation (Ubuntu/Debian)" in README.md.
+
+[Unit]
+Description=AGT Event Calendar
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=agt-event-calendar
+Group=agt-event-calendar
+WorkingDirectory=/opt/agt-event-calendar
+Environment=NODE_ENV=production
+Environment=AGT_CONFIG_FILE=/etc/agt-event-calendar/config.yaml
+# Secrets and bootstrap values (AGT_SETUP_PASSWORD). Optional: the leading "-".
+EnvironmentFile=-/etc/agt-event-calendar/.env
+ExecStart=/usr/bin/node dist-server/index.mjs
+Restart=on-failure
+RestartSec=5
+
+# /var/lib/agt-event-calendar: database, uploads and backups (storage.dataDir).
+StateDirectory=agt-event-calendar
+StateDirectoryMode=0750
+UMask=0027
+
+# Hardening. Do not add MemoryDenyWriteExecute=true: it breaks the V8 JIT.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

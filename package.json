@@ -1,7 +1,7 @@
 {
   "name": "agt-event-calendar",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -24,6 +24,7 @@
     "@fastify/multipart": "^10.1.8",
     "@fastify/rate-limit": "^11.2.2",
     "@fastify/static": "^10.1.10",
+    "@fastify/swagger": "^9.9.3",
     "@fastify/type-provider-typebox": "^6.3.0",
     "@sinclair/typebox": "^0.34.52",
     "altcha": "^3.5.0",

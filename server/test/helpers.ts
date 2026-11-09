@@ -23,7 +23,9 @@ export interface TestServer {
   close(): Promise<void>;
 }
 
-export async function createTestServer(options: { config?: string; setupPassword?: string | null } = {}): Promise<TestServer> {
+export async function createTestServer(
+  options: { config?: string; setupPassword?: string | null; staticDir?: string } = {},
+): Promise<TestServer> {
   const dir = mkdtempSync(path.join(tmpdir(), 'agt-test-'));
   const configText = options.config ?? '';
   const file = parseConfigText(`altcha:\n  cost: 1000\n${configText}`);
@@ -34,7 +36,7 @@ export async function createTestServer(options: { config?: string; setupPassword
     setupPassword: options.setupPassword === undefined ? SETUP_PASSWORD : options.setupPassword,
     version: 'test',
   };
-  const app = await buildApp(context);
+  const app = await buildApp(context, { staticDir: options.staticDir });
   return {
     app,
     context,

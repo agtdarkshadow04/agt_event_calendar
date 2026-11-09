@@ -86,7 +86,7 @@ export async function createBackup(context: AppContext, options: { keep?: boolea
     };
     files.unshift({ name: 'manifest.json', data: Buffer.from(JSON.stringify(manifest, null, 2)) });
 
-    const fileName = `${options.prefix ?? 'agt-calendar-backup'}-${timestamp()}.zip`;
+    const fileName = `${options.prefix ?? 'agt-event-calendar-backup'}-${timestamp()}.zip`;
     const outputPath = path.join(options.keep ? context.config.backupsDir : workDir, fileName);
     await writeZip(outputPath, files);
     if (options.keep) rmSync(workDir, { recursive: true, force: true });

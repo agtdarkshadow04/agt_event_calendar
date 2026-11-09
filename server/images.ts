@@ -96,6 +96,7 @@ export interface ImageRecord {
   sizeBytes: number;
   sha256: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 /** Writes an already-validated image under a random server-generated name. */
@@ -106,13 +107,15 @@ export function writeImageFile(uploadsDir: string, data: Uint8Array, mimeType: I
   const temporary = path.join(uploadsDir, `.${fileName}.tmp`);
   writeFileSync(temporary, data, { flag: 'wx' });
   renameSync(temporary, path.join(uploadsDir, fileName));
+  const timestamp = new Date().toISOString();
   return {
     id,
     fileName,
     mimeType,
     sizeBytes: data.length,
     sha256: createHash('sha256').update(data).digest('hex'),
-    createdAt: new Date().toISOString(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
   };
 }
 
