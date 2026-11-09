@@ -11,7 +11,7 @@ import { ErrorBodySchema } from './schemas';
 declare module 'fastify' {
   interface FastifyInstance {
     /** Every /api/ route registered on the app (HEAD excluded); used by the OpenAPI completeness test. */
-    apiRoutes: { method: string; url: string; hidden: boolean }[];
+    apiRoutes: { method: string; url: string; hidden: boolean; audit: boolean }[];
   }
   interface FastifyContextConfig {
     /**
@@ -44,7 +44,9 @@ export async function registerOpenApi(app: FastifyInstance, version: string): Pr
   app.addHook('onRoute', (route) => {
     if (!route.url.startsWith('/api/')) return;
     for (const method of ([] as string[]).concat(route.method)) {
-      if (method !== 'HEAD') apiRoutes.push({ method, url: route.url, hidden: route.schema?.hide === true });
+      if (method !== 'HEAD') {
+        apiRoutes.push({ method, url: route.url, hidden: route.schema?.hide === true, audit: route.config?.audit === true });
+      }
     }
   });
 
@@ -69,6 +71,7 @@ export async function registerOpenApi(app: FastifyInstance, version: string): Pr
         { name: 'changelog', description: 'Admin change-log management.' },
         { name: 'images', description: 'Uploaded images.' },
         { name: 'backup', description: 'Backup, restore and Migrate from Amplify.' },
+        { name: 'logs', description: 'Server log and audit log. Audit entries can be read and exported, never changed.' },
       ],
       components: {
         securitySchemes: {

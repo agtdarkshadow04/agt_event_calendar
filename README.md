@@ -14,6 +14,7 @@ AGT Event Calendar is a self-hosted calendar for events hosted by the Alliance o
 - [First run](#first-run)
 - [Configuration reference](#configuration-reference)
 - [Admin dashboard](#admin-dashboard)
+- [Logs](#logs)
 - [Migrating from Amplify](#migrating-from-amplify)
 - [Backup & restore](#backup--restore)
 - [Content safety](#content-safety)
@@ -188,6 +189,7 @@ This is enforced on the server. No API path, migration, backup restore or bulk u
 | `storage.databaseFile` | `agt-calendar.sqlite` | SQLite file, relative to `dataDir`. |
 | `storage.uploadsDir` | `uploads` | Uploaded images, relative to `dataDir`. |
 | `storage.backupsDir` | `backups` | Automatic pre-restore backups and temporary files, relative to `dataDir`. |
+| `storage.logDatabaseFile` | `logs.sqlite` | Log store (server log and audit log), relative to `dataDir`. Never part of a backup. |
 | `session.ttlHours` | `12` | Admin session lifetime. |
 | `session.secureCookie` | `auto` | `auto` marks the cookie `Secure` for HTTPS requests; `true`/`false` force it. |
 | `rateLimits.login` | `max: 10`, `windowMinutes: 15` | Admin login attempts per client. |
@@ -211,6 +213,10 @@ This is enforced on the server. No API path, migration, backup restore or bulk u
 | `migration.maxZipBytes` | `209715200` | Maximum migration/backup ZIP upload (200 MB). |
 | `migration.maxUncompressedBytes` | `1073741824` | Maximum total uncompressed ZIP size (zip-bomb protection). |
 | `migration.maxEntries` | `10000` | Maximum number of ZIP entries. |
+| `logs.serverRetentionDays` | `30` | Days server log entries are kept (1–3650). |
+| `logs.serverMaxEntries` | `100000` | Maximum number of server log entries (1000–10000000); the oldest are deleted first. |
+| `logs.auditRetentionDays` | `365` | Days audit log entries are kept (30–3650). The minimum of 30 stops anyone from erasing recent history by shortening it. |
+| `logs.auditMaxEntries` | `1000000` | Maximum number of audit log entries (10000–10000000); failed, denied and rate-limited entries are deleted before successful ones. |
 
 ## Admin dashboard
 
@@ -221,6 +227,8 @@ Open `/admin` and sign in. The dashboard has these tabs:
 - **National holidays** and **Change log**: create, edit, delete, publish and unpublish. A change-log entry has a date (`YYYY-MM-DD`) and changes (comma- or line-separated; each item is shown as a bullet).
 - **Images**: view, replace and delete uploads, and remove images no event uses.
 - **Settings**: the dashboard-editable keys above. Keys defined in `config.yaml` are read-only.
+- **Server log**: warnings, errors and other events the server recorded by itself. A badge on the tab (red when there are errors) and a link in the header show new warnings and errors; opening the tab marks them as seen. See [Logs](#logs).
+- **Audit log**: what users did, read-only. See [Logs](#logs).
 - **Migrate from Amplify**: see below.
 - **Backup & restore**: see below.
 - **Account**: change the admin password (other sessions are signed out).
@@ -232,6 +240,25 @@ Anyone can submit an event with **Add an Event** (`+` in the header). Submission
 ### Event IDs and old links
 
 Every event gets an RFC 9562 version 4 UUID. Events imported by **Migrate from Amplify** also keep their old 4-hex ID only to resolve old links: `?event_id=0001` opens the migrated event and the address bar is rewritten to its UUID, and bookmarks saved with old IDs are converted to UUIDs once, the next time the calendar loads. Bookmark import accepts both kinds of IDs; share links and bookmark exports always use UUIDs.
+
+## Logs
+
+The app keeps two logs in their own SQLite file, `logs.sqlite` in the data directory (`storage.logDatabaseFile`), next to the main database. Both are shown in the admin dashboard with filters, paging and an entry detail view, and both can be exported as JSON Lines or CSV (**Export**; CSV cells that would start a spreadsheet formula are prefixed with `'`). Times are stored in UTC and shown in your chosen time zone.
+
+| | Server log | Audit log |
+| --- | --- | --- |
+| Contains | What the server did by itself: startup (version, schema versions, listen address, configuration file or defaults), configuration warnings such as the `AGT_SETUP_PASSWORD` reminders, database migrations, log retention runs, unexpected errors (with the error message and stack) and shutdown | What users did: every change, sign-in and sign-out, first-run setup, password change, submission, backup download, restore, migration, log export, and every denied (401/403), rate-limited (429) or failed attempt |
+| Levels / outcomes | `info`, `warn`, `error`, `fatal` (debug and trace lines go to stdout only) | `success`, `denied`, `rate_limited`, `failure` |
+| Retention | `logs.serverRetentionDays` (30 days), `logs.serverMaxEntries` (100 000) | `logs.auditRetentionDays` (365 days, at least 30), `logs.auditMaxEntries` (1 000 000) |
+| Admin can | Filter, search, export and **Clear log** | Filter, search and export. It cannot be edited or cleared |
+
+Retention runs at startup and then hourly: it deletes entries older than the retention period, then the oldest entries above the cap. Each run that deletes something is recorded in the server log. The retention settings are in **Settings** (or `logs.*` in `config.yaml`), and changing them is itself audited.
+
+Each audit entry records the actor (`admin` with the username, or `anonymous`), the action (the API's `operationId`, for example `createAdminEvent`, `login` or `submitEvent`), the route, the affected resource, the outcome, the HTTP status, a request ID and a short summary of the change: names and changed field names, the old and new value of changed settings, file sizes and report counts. Passwords, Markdown descriptions, file contents and the values of fields that failed validation are never logged. Repeated failed attempts from the same client within a minute are merged into one entry with a count. When a request fails with an unexpected error, the audit entry and the server log entry share the same request ID. Access logs ("request completed") are not stored; the stdout log follows `server.logLevel` as before.
+
+**Privacy.** The audit log never stores IP addresses. It stores a pseudonymous network identifier: a keyed hash (HMAC-SHA256, 16 hex characters) of the client address, with IPv6 addresses cut to their /64 network, and a key generated once and kept in the log store. The identifier lets you see that attempts came from the same network without revealing the address. Behind a reverse proxy, set `server.trustProxy` so the hash is of the visitor's address rather than the proxy's. The audit log also holds the admin username and, for public submissions, the submitter's AGT username, for `logs.auditRetentionDays`. The submission form tells visitors that submissions are logged with a pseudonymous network identifier for abuse prevention.
+
+Logs are **not** part of backups, and a restore leaves both logs untouched; the restore itself is recorded in the audit log.
 
 ## Migrating from Amplify
 
@@ -305,13 +332,13 @@ ZIPs with absolute paths, `..` segments or symbolic links, and ZIPs that exceed 
 - `config.yaml`: the current file exactly as mounted,
 - `manifest.json`: app version, database schema version, creation time and a SHA-256 checksum for every file.
 
-`.env` is **never** included. The backup **does** contain sensitive data (the admin password hash and, if generated, the captcha key), so store it securely. External images referenced in descriptions are not included, because the app does not host them.
+`.env` and the logs (`logs.sqlite`) are **never** included. The backup **does** contain sensitive data (the admin password hash and, if generated, the captcha key), so store it securely. External images referenced in descriptions are not included, because the app does not host them.
 
 ### Restore
 
 Upload a backup under **Backup & restore → Restore** and review the preview. Before anything is replaced, the server checks the manifest checksums, that the archive contains only expected paths and is within the size limits, that the database passes `PRAGMA integrity_check` and has the expected schema (older schema versions are upgraded; newer ones are refused), and that every image passes the image checks.
 
-Restoring replaces the database, uploads and dashboard settings, **including the admin account**, and signs you out. An automatic backup of the current state is saved first to `backups/pre-restore-backup-<timestamp>.zip` in the data directory (`/app/data` with Docker, `/var/lib/agt-event-calendar` for a local installation), and files are swapped so that a failed restore leaves the instance unchanged. Dashboard settings in the backup for keys that `config.yaml` now defines are ignored and listed in the report.
+Restoring replaces the database, uploads and dashboard settings, **including the admin account**, and signs you out. An automatic backup of the current state is saved first to `backups/pre-restore-backup-<timestamp>.zip` in the data directory (`/app/data` with Docker, `/var/lib/agt-event-calendar` for a local installation), and files are swapped so that a failed restore leaves the instance unchanged. Dashboard settings in the backup for keys that `config.yaml` now defines are ignored and listed in the report. The server log and audit log are not changed by a restore, and the restore is recorded in the audit log.
 
 ### Restoring `config.yaml` by hand
 
@@ -377,6 +404,8 @@ Project layout:
 | `src/translations.ts`, `src/admin/i18n.ts` | UI strings for all 10 locales |
 
 ## Troubleshooting
+
+Start with the **Server log** tab in the admin dashboard: warnings and errors show there with their details, and the **Audit log** tab shows which requests failed or were denied (filter by outcome). If the app does not start at all, use the stdout log below.
 
 ### The server refuses to start
 

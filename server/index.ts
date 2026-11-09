@@ -5,7 +5,9 @@ import { buildApp } from './app';
 import { ConfigError, loadConfig } from './config';
 import type { AppContext } from './context';
 import { openDatabase } from './db';
-import { getAdmin } from './repository';
+import type { Migration } from './db';
+import { LogStore, createLogger } from './logs';
+import { logStartup } from './startup';
 
 function appVersion(root: string): string {
   try {
@@ -30,38 +32,36 @@ async function main() {
     throw error;
   }
 
-  const db = openDatabase(config.databaseFile);
+  const logMigrations: Migration[] = [];
+  const logs = LogStore.open(config.logDatabaseFile, (migration) => logMigrations.push(migration));
+  const migrations: Migration[] = [];
+  const db = openDatabase(config.databaseFile, { onMigration: (migration) => migrations.push(migration) });
   const context: AppContext = {
     config,
     db,
+    logs,
     setupPassword: process.env.AGT_SETUP_PASSWORD?.trim() || null,
     version: appVersion(root),
   };
+  // stdout follows server.logLevel; the server log gets info and above (LOG-5).
+  const logger = createLogger(logs, config.logLevel);
   const app = await buildApp(context, {
-    logger: { level: config.logLevel },
+    logger,
     staticDir: path.resolve(process.env.AGT_STATIC_DIR ?? path.join(root, 'dist')),
   });
 
-  if (config.rawText === null) app.log.warn(`No configuration file at ${configPath}; using defaults.`);
-  if (getAdmin(context.db)) {
-    if (context.setupPassword) {
-      app.log.warn('AGT_SETUP_PASSWORD is still set but is ignored because the admin account exists. Remove it from .env and restart.');
-    }
-  } else if (context.setupPassword) {
-    app.log.info('No admin account exists yet. Open /admin and use AGT_SETUP_PASSWORD to create it.');
-  } else {
-    app.log.warn('No admin account exists and AGT_SETUP_PASSWORD is not set. Set it in .env and restart to create the admin account.');
-  }
-
-  const shutdown = async () => {
+  const shutdown = async (signal: string) => {
+    app.log.info({ source: 'shutdown', signal }, `Shutting down (${signal}).`);
     await app.close();
     context.db.close();
+    context.logs.close();
     process.exit(0);
   };
-  process.on('SIGTERM', () => void shutdown());
-  process.on('SIGINT', () => void shutdown());
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
 
-  await app.listen({ host: config.host, port: config.port });
+  const address = await app.listen({ host: config.host, port: config.port });
+  logStartup(app.log, context, { migrations, logMigrations, address });
 }
 
 void main();

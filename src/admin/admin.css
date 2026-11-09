@@ -65,6 +65,20 @@
   font-size: 0.6rem;
 }
 
+.admin-badge.danger {
+  color: #fff;
+  background: var(--agt-red);
+}
+
+.admin-header-actions .admin-log-alert {
+  color: var(--agt-orange);
+  font-weight: 600;
+}
+
+.admin-header-actions .admin-log-alert.danger {
+  color: var(--agt-red);
+}
+
 .admin-panel {
   padding: 1.25rem;
   display: grid;
@@ -162,6 +176,63 @@
 .status-pill.pending { color: #ffcc66; border-color: rgba(255, 204, 102, 0.5); }
 .status-pill.rejected { color: #ff6b5e; }
 .status-pill.unpublished { color: var(--muted); }
+
+/* Log levels and outcomes: colour plus text (AGT web app spec LOG-19). */
+.status-pill.log-danger { color: var(--agt-red); border-color: var(--agt-red); }
+.status-pill.log-warning { color: var(--agt-orange); border-color: var(--agt-orange); }
+.status-pill.log-ok { color: #7bdba8; border-color: rgba(123, 219, 168, 0.5); }
+.status-pill.log-neutral { color: var(--muted); }
+
+.button.danger {
+  border-color: var(--agt-red);
+  color: #ff6b5e;
+}
+
+.log-table .log-time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.log-table .log-message {
+  overflow-wrap: anywhere;
+}
+
+.log-table .log-id {
+  font-size: 0.62rem;
+  overflow-wrap: anywhere;
+}
+
+.log-table .button {
+  min-height: 2rem;
+  padding: 0 0.7rem;
+  font-size: 0.58rem;
+  white-space: nowrap;
+}
+
+.log-details-row td {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.log-details-row p {
+  margin: 0 0 0.5rem;
+}
+
+.log-facts {
+  margin: 0 0 0.75rem;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.25rem 0.75rem;
+  font-size: 0.7rem;
+}
+
+.log-facts dt {
+  color: rgba(255, 180, 81, 0.72);
+}
+
+.log-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 
 .admin-notice {
   padding: 0.85rem 1rem;

@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ApiError, apiRequest } from '../lib/client';
 import { loadSettings, resolveTimeZone } from '../lib/settings';
-import { getTranslations } from '../translations';
+import { formatTranslation, getTranslations } from '../translations';
 import { AccountPanel } from './AccountPanel';
+import { AuditLogPanel } from './AuditLogPanel';
 import { BackupPanel } from './BackupPanel';
 import { ChangeLogPanel, HolidaysPanel } from './ContentPanels';
 import { AdminContext, errorMessage, useAdmin } from './context';
@@ -11,6 +12,7 @@ import { EventsPanel } from './EventsPanel';
 import { getAdminTranslations } from './i18n';
 import { ImagesPanel } from './ImagesPanel';
 import { MigratePanel } from './MigratePanel';
+import { ServerLogPanel } from './ServerLogPanel';
 import { SettingsPanel } from './SettingsPanel';
 
 type Phase =
@@ -20,7 +22,9 @@ type Phase =
   | { kind: 'login' }
   | { kind: 'dashboard'; username: string; setupPasswordStillSet: boolean };
 
-const TABS = ['events', 'moderation', 'holidays', 'changelog', 'images', 'settings', 'migrate', 'backup', 'account'] as const;
+const TABS = [
+  'events', 'moderation', 'holidays', 'changelog', 'images', 'settings', 'serverLog', 'auditLog', 'migrate', 'backup', 'account',
+] as const;
 type Tab = (typeof TABS)[number];
 
 function SetupScreen({ configured, onDone }: { configured: boolean; onDone: () => void }) {
@@ -134,6 +138,7 @@ export function AdminApp() {
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [tab, setTab] = useState<Tab>('events');
   const [pendingCount, setPendingCount] = useState(0);
+  const [logSummary, setLogSummary] = useState({ unseenWarnings: 0, unseenErrors: 0 });
   const [loginNotice, setLoginNotice] = useState('');
 
   const refresh = useCallback(async () => {
@@ -176,6 +181,26 @@ export function AdminApp() {
     if (phase.kind === 'dashboard') void refreshPending();
   }, [phase.kind, refreshPending, tab]);
 
+  // Unseen server log warnings and errors: fetched when the dashboard loads and
+  // when tabs change, never polled in the background. Opening the Server log
+  // tab marks them as seen.
+  const refreshLogSummary = useCallback(async (markSeen: boolean) => {
+    try {
+      setLogSummary(await apiRequest<{ unseenWarnings: number; unseenErrors: number }>(
+        markSeen ? '/api/admin/logs/server/seen' : '/api/admin/logs/server/summary',
+        { method: markSeen ? 'POST' : 'GET' },
+      ));
+    } catch {
+      // The badge is optional; the Server log tab shows its own errors.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (phase.kind === 'dashboard') void refreshLogSummary(tab === 'serverLog');
+  }, [phase.kind, refreshLogSummary, tab]);
+
+  const unseenLogEntries = logSummary.unseenWarnings + logSummary.unseenErrors;
+
   const signOut = async () => {
     try {
       await apiRequest('/api/admin/logout', { method: 'POST' });
@@ -196,6 +221,8 @@ export function AdminApp() {
     changelog: t.tabChangeLog,
     images: t.tabImages,
     settings: t.tabSettings,
+    serverLog: t.tabServerLog,
+    auditLog: t.tabAuditLog,
     migrate: t.tabMigrate,
     backup: t.tabBackup,
     account: t.tabAccount,
@@ -213,6 +240,15 @@ export function AdminApp() {
             <a href="/">{t.viewSite}</a>
             {phase.kind === 'dashboard' && (
               <>
+                {unseenLogEntries > 0 && tab !== 'serverLog' && (
+                  <a
+                    href="#server-log"
+                    className={logSummary.unseenErrors > 0 ? 'admin-log-alert danger' : 'admin-log-alert'}
+                    onClick={(event) => { event.preventDefault(); setTab('serverLog'); }}
+                  >
+                    {formatTranslation(t.unseenServerLog, { count: unseenLogEntries })}
+                  </a>
+                )}
                 <span>{phase.username}</span>
                 <button className="button button-secondary" type="button" onClick={() => void signOut()}>{t.signOut}</button>
               </>
@@ -240,6 +276,9 @@ export function AdminApp() {
                   >
                     {tabLabels[name]}
                     {name === 'moderation' && pendingCount > 0 && <span className="admin-badge">{pendingCount}</span>}
+                    {name === 'serverLog' && unseenLogEntries > 0 && (
+                      <span className={logSummary.unseenErrors > 0 ? 'admin-badge danger' : 'admin-badge'}>{unseenLogEntries}</span>
+                    )}
                   </button>
                 ))}
               </nav>
@@ -250,6 +289,8 @@ export function AdminApp() {
                 {tab === 'changelog' && <ChangeLogPanel />}
                 {tab === 'images' && <ImagesPanel />}
                 {tab === 'settings' && <SettingsPanel />}
+                {tab === 'serverLog' && <ServerLogPanel onCleared={() => void refreshLogSummary(true)} />}
+                {tab === 'auditLog' && <AuditLogPanel />}
                 {tab === 'migrate' && <MigratePanel />}
                 {tab === 'backup' && <BackupPanel onSessionEnded={endedSession} />}
                 {tab === 'account' && <AccountPanel />}

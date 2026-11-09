@@ -270,3 +270,80 @@ export const RestoreReportSchema = Type.Object({
   }),
   preRestoreBackup: Nullable(Type.String()),
 });
+
+// ------------------------------------------------------------------ logs
+
+const Details = Type.Record(Type.String(), Type.Unknown(), { description: 'JSON summary; never secrets or bulk content.' });
+const LogLevelSchema = Type.Union([Type.Literal('info'), Type.Literal('warn'), Type.Literal('error'), Type.Literal('fatal')]);
+const OutcomeSchema = Type.Union([
+  Type.Literal('success'), Type.Literal('denied'), Type.Literal('rate_limited'), Type.Literal('failure'),
+]);
+const ActorTypeSchema = Type.Union([Type.Literal('admin'), Type.Literal('anonymous')]);
+const FilterText = Type.String({ minLength: 1, maxLength: 200 });
+const TimeFilter = Type.String({ minLength: 1, maxLength: 40, description: 'ISO 8601 UTC timestamp.' });
+const ExportFormat = Type.Union([Type.Literal('jsonl'), Type.Literal('csv')], { default: 'jsonl' });
+const paging = {
+  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200, default: 50 })),
+  cursor: Type.Optional(Type.String({ minLength: 1, maxLength: 64, description: 'Opaque cursor from nextCursor.' })),
+};
+
+export const ServerLogEntrySchema = Type.Object({
+  id: Uuid,
+  at: Timestamp,
+  level: LogLevelSchema,
+  source: Type.String({ description: 'Subsystem: startup, shutdown, config, migrations, retention, backup, http or server.' }),
+  message: Type.String(),
+  requestId: Nullable(Type.String({ description: 'Request ID shared with the audit entry of the same request.' })),
+  details: Details,
+}, { additionalProperties: false });
+
+export const AuditEntrySchema = Type.Object({
+  id: Uuid,
+  at: Timestamp,
+  lastAt: Timestamp,
+  count: Type.Integer({ description: 'Number of identical events; failed attempts within 60 seconds are coalesced.' }),
+  actorType: ActorTypeSchema,
+  actor: Nullable(Type.String({ description: 'Admin username, or the AGT username of an anonymous submitter.' })),
+  ipHash: Nullable(Type.String({ description: 'Pseudonymous client address (HMAC); never the raw IP.' })),
+  client: Type.Union([Type.Literal('web'), Type.Literal('api')]),
+  action: Type.String({ description: 'The operationId of the route.' }),
+  method: Type.String(),
+  route: Type.String({ description: 'Route pattern, without the query string.' }),
+  targetType: Nullable(Type.String()),
+  targetId: Nullable(Type.String()),
+  outcome: OutcomeSchema,
+  statusCode: Type.Integer(),
+  requestId: Nullable(Type.String()),
+  details: Details,
+}, { additionalProperties: false });
+
+const serverLogFilters = {
+  level: Type.Optional(LogLevelSchema),
+  source: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  from: Type.Optional(TimeFilter),
+  to: Type.Optional(TimeFilter),
+  q: Type.Optional(FilterText),
+};
+
+const auditLogFilters = {
+  actorType: Type.Optional(ActorTypeSchema),
+  action: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
+  outcome: Type.Optional(OutcomeSchema),
+  targetType: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  targetId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  from: Type.Optional(TimeFilter),
+  to: Type.Optional(TimeFilter),
+  q: Type.Optional(FilterText),
+};
+
+export const ServerLogQuerySchema = Type.Object({ ...serverLogFilters, ...paging }, { additionalProperties: false });
+export const ServerLogExportQuerySchema = Type.Object({ ...serverLogFilters, format: Type.Optional(ExportFormat) }, { additionalProperties: false });
+export const AuditLogQuerySchema = Type.Object({ ...auditLogFilters, ...paging }, { additionalProperties: false });
+export const AuditLogExportQuerySchema = Type.Object({ ...auditLogFilters, format: Type.Optional(ExportFormat) }, { additionalProperties: false });
+
+export const ServerLogPageSchema = Type.Object({ items: Type.Array(ServerLogEntrySchema), nextCursor: Nullable(Type.String()) });
+export const AuditLogPageSchema = Type.Object({ items: Type.Array(AuditEntrySchema), nextCursor: Nullable(Type.String()) });
+export const ServerLogSummarySchema = Type.Object({
+  unseenWarnings: Type.Integer({ description: 'warn entries since the last "seen" marker.' }),
+  unseenErrors: Type.Integer({ description: 'error and fatal entries since the last "seen" marker.' }),
+});

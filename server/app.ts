@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { createReadStream, existsSync } from 'node:fs';
 import path from 'node:path';
 import fastifyCookie from '@fastify/cookie';
@@ -7,15 +7,18 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
-import Fastify from 'fastify';
+import Fastify, { LogController } from 'fastify';
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify';
+import type { FieldError } from '../src/lib/validation';
 import type { ApiEvent, PublicSettings } from '../src/lib/api';
 import { isLegacyEventId, isUuidV4, validateAgtUsername, validateEventInput } from '../src/lib/validation';
 import { registerAdminRoutes } from './adminRoutes';
+import { auditFailure, registerAudit, setAudit } from './audit';
 import { createAltchaChallenge, verifyAltchaPayload } from './altcha';
 import type { AppContext } from './context';
 import { setting } from './context';
 import { HttpError, readMultipart } from './http';
+import { createLogger, scheduleRetention } from './logs';
 import { SECURITY, errorResponses, registerOpenApi } from './openapi';
 import {
   AltchaChallengeSchema, ApiChangeLogEntrySchema, ApiEventSchema, ApiHolidaySchema, OkSchema,
@@ -55,7 +58,11 @@ export const CONTENT_SECURITY_POLICY = [
 const NO_STORE = 'no-store, no-cache, must-revalidate, max-age=0';
 
 export interface BuildOptions {
-  logger?: boolean | FastifyBaseLogger | Record<string, unknown>;
+  /**
+   * The pino logger from `createLogger()` (stdout + server log). Without one,
+   * entries still go to the server log but not to stdout.
+   */
+  logger?: FastifyBaseLogger;
   /** Directory with the built SPA (`dist/`). Skipped when it does not exist. */
   staticDir?: string;
 }
@@ -80,6 +87,15 @@ export function publicSettings(context: AppContext): PublicSettings {
   };
 }
 
+/** Field names (never values) from a request schema validation error. */
+function schemaErrorFields(validation: unknown): FieldError[] {
+  if (!Array.isArray(validation)) return [];
+  return validation.map((issue: { instancePath?: string; params?: { missingProperty?: string; additionalProperty?: string } }) => {
+    const path = (issue.instancePath ?? '').replace(/^\//, '').split('/')[0];
+    return { field: path || issue.params?.missingProperty || issue.params?.additionalProperty || '(body)', message: '' };
+  });
+}
+
 const rateLimit = (max: number | ((request: FastifyRequest) => number), windowMinutes: number | ((request: FastifyRequest) => number)) => ({
   rateLimit: {
     max,
@@ -91,13 +107,19 @@ const rateLimit = (max: number | ((request: FastifyRequest) => number), windowMi
 
 export async function buildApp(context: AppContext, options: BuildOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: options.logger ?? false,
+    loggerInstance: options.logger ?? createLogger(context.logs, 'silent', null),
+    // Access logs describe user activity, which the audit log covers (LOG-6).
+    logController: new LogController({ disableRequestLogging: true }),
+    // Request IDs link an audit entry to the server log entry of the same request.
+    genReqId: () => randomUUID(),
     trustProxy: context.config.trustProxy,
     bodyLimit: 2 * 1024 * 1024,
   }).withTypeProvider<TypeBoxTypeProvider>();
 
   await registerOpenApi(app, context.version);
   await app.register(fastifyCookie);
+  registerAudit(app, context);
+  scheduleRetention(app, context);
   await app.register(fastifyMultipart, { throwFileSizeLimit: true });
   await app.register(fastifyRateLimit, {
     global: false,
@@ -125,27 +147,41 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
 
   app.setErrorHandler((error: Error & { statusCode?: number; code?: string; validation?: unknown }, request, reply) => {
     if (error instanceof HttpError) {
+      auditFailure(request, error.code, error.fields);
       return reply.status(error.statusCode).send({ error: error.code, message: error.message, fields: error.fields });
     }
     if (error instanceof ImageRejectedError) {
+      auditFailure(request, 'image_rejected');
       return reply.status(error.statusCode).send({ error: 'image_rejected', message: error.message });
     }
     if (error instanceof ZipRejectedError) {
+      auditFailure(request, 'archive_rejected');
       return reply.status(422).send({ error: 'archive_rejected', message: error.message });
     }
     if (error.validation) {
+      auditFailure(request, 'invalid_request', schemaErrorFields(error.validation));
       return reply.status(400).send({ error: 'invalid_request', message: error.message });
     }
     if (error.code === 'FST_REQ_FILE_TOO_LARGE' || error.statusCode === 413) {
+      auditFailure(request, 'file_too_large');
       return reply.status(413).send({ error: 'file_too_large', message: 'The upload is too large.' });
     }
     if (error.statusCode === 429) {
+      auditFailure(request, 'rate_limited');
       return reply.status(429).send({ error: 'rate_limited', message: error.message });
     }
     if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
+      auditFailure(request, error.code ?? 'bad_request');
       return reply.status(error.statusCode).send({ error: error.code ?? 'bad_request', message: error.message });
     }
-    request.log.error(error);
+    auditFailure(request, 'internal');
+    // Only the error's name, message and stack, and the route: never headers or the body (LOG-9).
+    request.log.error({
+      source: 'http',
+      err: { name: error.name, message: error.message, stack: error.stack },
+      method: request.method,
+      route: request.routeOptions.url ?? null,
+    }, `Unexpected error: ${error.message}`);
     return reply.status(500).send({ error: 'internal', message: 'An unexpected server error occurred.' });
   });
 
@@ -289,6 +325,8 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     }
     if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new HttpError(400, 'invalid_request', 'The event field must contain a JSON object.');
     const username = validateAgtUsername(form.fields.agtUsername);
+    // The AGT username is the identifier this feature already collects (LOG-10).
+    if (username.ok) setAudit(request, { actor: username.value });
     const event = validateEventInput(raw);
     const errors = [...(username.ok ? [] : username.errors), ...(event.ok ? [] : event.errors)];
     if (!username.ok || !event.ok) throw new HttpError(400, 'validation_failed', 'The submission is invalid.', errors);
@@ -313,7 +351,15 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
       coverImageId,
       submitterAgtUsername: username.value,
     });
-    request.log.info({ eventId: id }, 'Event submitted for moderation');
+    const coverImage = coverImageId ? getImage(context.db, coverImageId) : null;
+    setAudit(request, {
+      targetType: 'event',
+      targetId: id,
+      details: {
+        name: event.value.name,
+        cover: coverImage ? { sizeBytes: coverImage.sizeBytes, mimeType: coverImage.mimeType } : null,
+      },
+    });
     return reply.status(201).send({ id, status: 'pending' });
   });
 
@@ -370,7 +416,10 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     if (!createAdmin(context.db, username, await hashPassword(password))) {
       throw new HttpError(410, 'setup_complete', 'The admin account already exists. First-run setup is disabled.');
     }
-    request.log.warn('Admin account created. Remove AGT_SETUP_PASSWORD from .env and restart the container.');
+    // The audit entry records that setup happened. The server log gets only the
+    // configuration reminder of AUTH-6, which is not tied to this request.
+    setAudit(request, { actorType: 'admin', actor: username, targetType: 'admin' });
+    app.log.warn({ source: 'config' }, 'The admin account now exists. Remove AGT_SETUP_PASSWORD from .env and restart.');
     startSession(context, request, reply);
     return reply.status(201).send({ username });
   });
@@ -395,6 +444,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     if (!admin || !passwordOk || !usernameOk) {
       throw new HttpError(401, 'invalid_credentials', 'The username or password is incorrect.');
     }
+    setAudit(request, { actorType: 'admin', actor: admin.username });
     startSession(context, request, reply);
     return { username: admin.username };
   });
