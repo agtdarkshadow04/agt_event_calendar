@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Spec version** | 1.0.0 |
+| **Spec version** | 1.0.1 |
 | **Status** | Normative |
 | **Audience** | AI coding agents that design, build, review or maintain AGT web applications |
 | **Reference implementation** | [`Folfchie/agt_event_calendar`](https://github.com/Folfchie/agt_event_calendar) (AGT Event Calendar), with the deviations listed in [Appendix A](#appendix-a-reference-implementation-deviations) |
@@ -1153,19 +1153,14 @@ Use this list to review a new app or a large change. Every item must be true or 
 
 ## Appendix A: Reference implementation deviations
 
-The AGT Event Calendar predates this spec. Where it differs, **the spec wins for new code**; do not copy these
-patterns into other apps. Fixing them in the calendar is tracked separately; renames that would break existing
-deployments are kept on purpose.
+The AGT Event Calendar predates this spec and was brought into compliance afterwards. The deviations that
+remain are kept on purpose and are also listed in its `AGENTS.md`. **Do not copy them into other apps.**
 
-| Rule | Calendar today | Status |
+| Rule | Calendar today | Why it is kept |
 | --- | --- | --- |
-| NAME-2, CFG-2 | Env vars `AGT_SETUP_PASSWORD`, `AGT_CONFIG_FILE`, `AGT_STATIC_DIR` (no app segment); cookie `agt_session`; Compose service `calendar`, volume `calendar-data`; SQLite file `agt-calendar.sqlite` | **Kept** as legacy names: renaming would break existing `.env` files and orphan the data volume. New apps use the spec names. |
-| CFG-5 | Backup/import limits live under `migration.*` | Kept (operators may have them in `config.yaml`). |
-| API-10, API-11, API-13 | No OpenAPI document; several admin routes accept an untyped `AnyObject` body and some have no response schema | To fix: add `@fastify/swagger`, full schemas and the completeness test. |
-| API-2 | `DELETE` returns `200 { ok: true }` instead of `204` | To fix together with the OpenAPI work, updating the admin client. |
-| DEP-6..9 | Only Docker Compose installation is documented; no `deploy/` directory | To fix: add the systemd unit, Caddy example and README section. |
-| DOC-2 | `AGENTS.md` has no spec link version or deviations section | To fix. |
-| UI-14 | `NMS-Glyphs-Mono-fixed2026.ttf` is bundled but not declared or used; portal codes are shown only as hex text | To fix: add the `@font-face`, `.portal-glyphs` and `isPortalCode()`, and render glyphs in the event details. |
+| NAME-2, CFG-2 | Env vars `AGT_SETUP_PASSWORD`, `AGT_CONFIG_FILE`, `AGT_STATIC_DIR` (no app segment); cookie `agt_session`; Compose service `calendar`, volume `calendar-data`; SQLite file `agt-calendar.sqlite` | Renaming would break existing `.env` files, sign everyone out and orphan the data volume. New apps use the spec names. |
+| CFG-5 | Backup/import limits live under `migration.*` | Operators may have them in `config.yaml`, and unknown keys stop the server. |
+| STACK-1 | Extra runtime dependency `papaparse` | Parses the legacy CSVs for Migrate from Amplify. |
 
 Calendar-specific features that are **not** part of the standard: Migrate from Amplify (`server/migration.ts`,
 `src/lib/csv.ts`), legacy 4-hex event IDs, bookmarks, the national holidays and change log content types, the
