@@ -8,6 +8,8 @@ coverage/
 
 # Self-hosting
 .env
+.env.*
+!.env.example
 config.yaml
 data/
 dist-server/
