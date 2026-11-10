@@ -3,13 +3,18 @@ import type { RefObject } from 'react';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-/** Modal behaviour shared by dialogs: Escape closes, Tab is trapped, focus is restored, page scroll is locked. */
+/**
+ * Modal behaviour shared by every dialog (A11Y-2): Escape closes, Tab is trapped, initial focus is set, focus returns
+ * to the opener, page scroll is locked. `active` is for dialogs that stay mounted while closed.
+ */
 export function useDialog(
   dialogRef: RefObject<HTMLElement | null>,
   initialFocusRef: RefObject<HTMLElement | null>,
   onClose: () => void,
+  active = true,
 ) {
   useEffect(() => {
+    if (!active) return undefined;
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -25,12 +30,14 @@ export function useDialog(
         .filter((element) => !element.closest('[hidden]'));
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (keyEvent.shiftKey && document.activeElement === first) {
+      if (!first || !last) return;
+      // The dialog itself may hold focus (an initial focus on the container).
+      if (keyEvent.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) {
         keyEvent.preventDefault();
-        last?.focus();
+        last.focus();
       } else if (!keyEvent.shiftKey && document.activeElement === last) {
         keyEvent.preventDefault();
-        first?.focus();
+        first.focus();
       }
     };
 
@@ -42,5 +49,5 @@ export function useDialog(
       document.body.style.overflow = previousOverflow;
       previouslyFocused?.focus();
     };
-  }, [dialogRef, initialFocusRef, onClose]);
+  }, [dialogRef, initialFocusRef, onClose, active]);
 }

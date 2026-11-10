@@ -63,6 +63,10 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
   ([#62](https://github.com/agtdarkshadow04/agt_event_calendar/issues/62)).
 - The NMS Futura licence (`public/fonts/NMSFuturaProBook-OFL.txt`) is shipped with the font, and the README credits
   every bundled font ([#64](https://github.com/agtdarkshadow04/agt_event_calendar/issues/64)).
+- Playwright browser tests (`npm run test:e2e`, `tests/e2e/`), run in CI: first-run setup and sign-in, every dialog with
+  the keyboard, axe WCAG 2.2 AA checks, no horizontal scroll at 300 to 1180 px and at the 2× font scale, live
+  regions, and no console errors or CSP violations. A release PR template lists the manual acceptance checks
+  ([#65](https://github.com/agtdarkshadow04/agt_event_calendar/issues/65)).
 - `package.json` approves the install scripts of `better-sqlite3` and `esbuild` in `allowScripts`, so `npm ci` behaves
   the same with npm 11.20 and newer ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
 
@@ -81,6 +85,10 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
   references, schema version, tables and referenced images) and then commits, removing locked settings and sessions
   in one transaction. Set-aside paths that cannot be deleted no longer fail the restore; they are listed as
   `warnings` in its result and in the server log ([#62](https://github.com/agtdarkshadow04/agt_event_calendar/issues/62)).
+- Accessibility fixes found by the browser tests: the calendar grid has rows, day cells and event buttons are named by
+  their visible text (plus the full date for screen readers), the settings import field has a name and no tab stop of
+  its own, every dialog uses the shared dialog behaviour, and the header and month picker no longer overflow at 300 px
+  with the 2× font scale ([#65](https://github.com/agtdarkshadow04/agt_event_calendar/issues/65)).
 - The calendar and dashboard use the AGT base stylesheet (`src/agt-base.css`, copied unmodified from the spec), which
   also brings the darker primary-button colour `--agt-red-orange: #cb4c2b` for contrast
   ([#64](https://github.com/agtdarkshadow04/agt_event_calendar/issues/64)).

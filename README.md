@@ -437,6 +437,14 @@ npm run dev:server   # API + built UI on http://localhost:8080 (uses ./config.ya
 npm run dev          # Vite dev server with hot reload; proxies /api to port 8080
 ```
 
+The browser tests need Chromium, which `npm ci` does not install. Install it once, with its system libraries, using the project's Playwright version:
+
+```bash
+npx playwright install --with-deps chromium
+```
+
+Then run `npm run test:e2e`. Failures leave a trace in `test-results/`; open it with `npx playwright show-trace`.
+
 For local development, start the API with a setup password, for example `AGT_SETUP_PASSWORD=dev-setup-password npm run dev:server`.
 
 The app follows the [AGT Web Application Specification](docs/agt-webapp-spec.md) v4.0.0, a pinned copy from [`agtdarkshadow04/agt_webapp_specification`](https://github.com/agtdarkshadow04/agt_webapp_specification); [`AGENTS.md`](AGENTS.md) is the guide for AI coding agents and lists where the app deviates from the spec.
@@ -448,6 +456,7 @@ The app follows the [AGT Web Application Specification](docs/agt-webapp-spec.md)
 | `npm run lint` | Strict TypeScript check of the client, server and tests. |
 | `npm test` | Client tests (`src/lib/*.test.ts`) and server tests (`server/test/*.test.ts`, Fastify `inject()` with `node:test`). |
 | `npm run build` | Builds the SPA (`dist/`) and the server bundle (`dist-server/`). |
+| `npm run test:e2e` | Builds, then runs the Playwright browser tests (`tests/e2e/`) against the built server with a fresh data directory: first-run setup and sign-in, every dialog with the keyboard, axe WCAG 2.2 AA checks, no horizontal scroll from 300 px to 1180 px and at the 2× font scale. Not part of `check`, because it needs a browser. |
 | `npm start` | Runs the built server. |
 
 Project layout:

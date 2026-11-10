@@ -5,6 +5,7 @@ import { filterEvents } from '../lib/filter';
 import { formatTranslation, getTranslations } from '../translations';
 import type { CalendarEvent } from '../types';
 import { BookmarkIcon, XIcon } from './Icons';
+import { useDialog } from './useDialog';
 
 interface BookmarksModalProps {
   ids: string[];
@@ -48,43 +49,11 @@ export function BookmarksModal({
 
   useEffect(() => {
     activeRef.current = true;
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    const handleKeyDown = (keyEvent: KeyboardEvent) => {
-      if (keyEvent.key === 'Escape') {
-        keyEvent.preventDefault();
-        onClose();
-        return;
-      }
-      if (keyEvent.key !== 'Tab' || !dialogRef.current) return;
-      const focusable = Array.from(
-        dialogRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]):not([hidden]), [tabindex]:not([tabindex="-1"])',
-        ),
-      );
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (keyEvent.shiftKey && document.activeElement === first) {
-        keyEvent.preventDefault();
-        last?.focus();
-      } else if (!keyEvent.shiftKey && document.activeElement === last) {
-        keyEvent.preventDefault();
-        first?.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    const frame = requestAnimationFrame(() => closeButtonRef.current?.focus());
     return () => {
       activeRef.current = false;
-      cancelAnimationFrame(frame);
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      previouslyFocused?.focus();
     };
-  }, [onClose]);
+  }, []);
+  useDialog(dialogRef, closeButtonRef, onClose);
 
   const changeBookmarks = (update: (ids: string[]) => string[], message: string) => {
     const saved = onChange(update);

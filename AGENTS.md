@@ -32,6 +32,7 @@ npm test            # test:client (src/lib/*.test.ts) + test:server (server/test
 npm run build       # SPA → dist/, server bundle → dist-server/index.mjs
 npm run dev:server  # build + run the server on :8080 (reads ./config.yaml, data in ./data)
 npm run dev         # Vite dev server on :5173, proxies /api to :8080
+npm run test:e2e    # build + Playwright browser tests (needs `npx playwright install --with-deps chromium` once)
 docker compose up -d --build   # the real deployment
 ```
 
@@ -67,6 +68,8 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 | `server/dataWrite.ts` | Operation lock (`idle`/`backup`/`restore`/`restore_failed`), `withDataWrite()`, `503 maintenance`, job runner |
 | `server/altcha.ts`, `server/passwords.ts`, `server/session.ts` | Captcha, scrypt hashes, cookie sessions |
 | `server/test/` | `node:test` + Fastify `inject()`; `helpers.ts`; `fixtures/amplify-migration/` is the reference ZIP |
+| `tests/e2e/`, `playwright.config.ts` | Playwright browser tests (TEST-6): `setup.e2e.ts` is the first-run setup project; `fixtures.ts` fails a test on any console error or CSP violation |
+| `.github/PULL_REQUEST_TEMPLATE/release.md` | Release PR checklist (VER-12, TEST-6 to TEST-9): `?template=release.md` |
 | `src/App.tsx` | Calendar root: API loading, filters, modals, bookmarks, `?event_id=` deep links (legacy IDs → UUID) |
 | `src/lib/validation.ts` | **Shared** validation (server + browser). Change rules here only |
 | `src/lib/errors.ts` | Error and field codes, `fieldError()`, and the translated `errorText()` / `fieldErrorText()` |
@@ -120,7 +123,9 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
   `npm install-scripts approve|deny <pkg>` so that `npm install-scripts ls` lists nothing (CI fails otherwise).
   Approving a new script needs a reason in the PR (STACK-7).
 - TypeScript is `strict` with `noUnusedLocals`/`noUnusedParameters`; lint fails on unused symbols.
-- Accessibility matters: modals manage focus (`useDialog`), icon buttons need `aria-label`s (from translations).
+- Accessibility matters: every dialog uses `useDialog()` (Escape, focus trap, focus return), icon buttons need
+  `aria-label`s (from translations), and a control's accessible name must contain its visible text (no `aria-label`
+  that replaces visible text). New UI gets a browser test; `npm run test:e2e` runs axe on every page and dialog.
 - **API routes:** every `/api/` route declares TypeBox schemas (`params`, `querystring`, `body`, every success
   response and `default: ErrorBodySchema` via `errorResponses`) plus `operationId`, `tags`, `summary` and
   `security` (`SECURITY.*` from `server/openapi.ts`). Response schemas must list every field: the serializer drops
