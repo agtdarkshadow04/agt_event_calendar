@@ -1,23 +1,24 @@
 {
   "name": "agt-event-calendar",
   "private": true,
-  "version": "2.2.0",
+  "version": "3.0.0",
   "type": "module",
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=26.0.0 <27",
+    "npm": ">=11.20.0 <12"
   },
   "scripts": {
     "dev": "vite",
     "dev:server": "npm run build:server && node dist-server/index.mjs",
     "build": "npm run build:client && npm run build:server",
     "build:client": "tsc -b && vite build",
-    "build:server": "esbuild server/index.ts --bundle --platform=node --target=node24 --format=esm --packages=external --loader:.sql=text --outfile=dist-server/index.mjs",
+    "build:server": "esbuild server/index.ts --bundle --platform=node --target=node26 --format=esm --packages=external --loader:.sql=text --outfile=dist-server/index.mjs",
     "start": "node dist-server/index.mjs",
     "lint": "tsc -b --pretty false",
     "check": "npm run lint && npm test && npm run build",
     "test": "npm run test:client && npm run test:server",
     "test:client": "esbuild src/lib/*.test.ts --bundle --platform=node --format=esm --jsx=automatic --external:react --external:react-dom --outdir=.test-build/client --out-extension:.js=.mjs && node --test .test-build/client/*.test.mjs",
-    "test:server": "esbuild server/test/*.test.ts --bundle --platform=node --target=node22 --format=esm --packages=external --loader:.sql=text --outdir=.test-build/server --out-extension:.js=.mjs && node --test --test-concurrency=1 .test-build/server/*.test.mjs"
+    "test:server": "esbuild server/test/*.test.ts --bundle --platform=node --target=node26 --format=esm --packages=external --loader:.sql=text --outdir=.test-build/server --out-extension:.js=.mjs && node --test --test-concurrency=1 .test-build/server/*.test.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.5",
@@ -43,15 +44,19 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^24.19.2",
+    "@types/node": "^26.6.6",
     "@types/papaparse": "^5.3.16",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "@types/yauzl": "^3.4.0",
     "@types/yazl": "^3.3.1",
-    "@vitejs/plugin-react": "^4.4.1",
-    "esbuild": "^0.25.2",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "@vitejs/plugin-react": "^6.3.0",
+    "esbuild": "^0.28.2",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.7"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true,
+    "esbuild@0.28.2": true
   }
 }
