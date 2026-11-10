@@ -78,8 +78,9 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 | `src/admin/` | Admin dashboard; strings in `src/admin/i18n.ts` |
 | `src/admin/ServerLogPanel.tsx`, `AuditLogPanel.tsx`, `LogShared.tsx` | Server log and Audit log tabs (filters, paging, export, details); helpers in `src/lib/logs.ts` |
 | `src/translations.ts` | Public UI strings for 10 locales (~2000 lines — grep, don't read whole) |
-| `src/styles.css` | All public styling (grep for the class you need); admin styles in `src/admin/admin.css` |
-| `public/` | Static assets incl. the bundled fonts (NMS Futura, NMS Glyphs Mono, flags). Large binaries — don't open |
+| `src/agt-base.css` | AGT base stylesheet (UI-16): tokens, fonts, page background, buttons, fields, modals, notes. Copied unmodified from the spec; **never edit** |
+| `src/styles.css` | All public styling (grep for the class you need); imports `agt-base.css` first; admin styles in `src/admin/admin.css` |
+| `public/` | Static assets incl. the bundled fonts (NMS Futura, NMS Glyphs Mono, flags) and their licence files, copied unmodified from the spec (`server/test/assets.test.ts` checks the hashes). Large binaries — don't open |
 | `deploy/` | systemd unit and Caddy example for local installations |
 | `docs/agt-webapp-spec.md` | Pinned copy of the AGT Web Application Specification v4.0.0. Never edit; source: `agtdarkshadow04/agt_webapp_specification` |
 
@@ -127,6 +128,9 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
   `server/test/openapi.test.ts` fails if a route is missing from the document or incomplete.
 - **Admin CRUD responses:** create → `201 { <resource>, notices }`, replace → `200 { <resource>, notices }`,
   delete → `204` with no body. A breaking API change bumps the major version in `package.json`.
+- **Styles (UI-16):** never redefine a base token or re-add a rule `src/agt-base.css` defines; add a modifier class
+  for a calendar-specific variant (e.g. `.settings-import-status.error-note`). Text in `--agt-red` never goes on
+  `--surface-soft` (A11Y-1).
 - **Portal codes** are shown with `<PortalGlyphs>` next to the hex text; never use the glyph font for other text.
 - **Data writes (BAK-8):** every `/api/` route declares `config: { writesData: true | false }` (registration throws
   otherwise) and every job runs through `context.operation.runJob({ name, writesData }, fn)`. `writesData: true` means it

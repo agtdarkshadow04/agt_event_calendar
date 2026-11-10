@@ -1,0 +1,405 @@
+/*
+ * AGT base stylesheet (AGT Web Application Specification, UI-16).
+ * Copy this file unmodified to src/agt-base.css and import it first from src/styles.css.
+ * It holds the UI-1 tokens, the UI-3 fonts, the UI-6 page background and the UI-9/UI-10/UI-11
+ * shared components. App styles add to it; they never edit it or redefine its tokens.
+ * Source: agtdarkshadow04/agt_webapp_specification, assets/css/agt-base.css.
+ */
+
+:root {
+  color-scheme: dark;
+  font-family: 'NMS Futura', Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #ffb451;
+  background: #0a0a0a;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --agt-orange: #ffb451;      /* primary text accent, links, focus ring */
+  --agt-red-orange: #cb4c2b;  /* primary buttons, scrollbar; white text on it is 4.56:1 */
+  --agt-red: #ff0500;         /* borders of primary/selected elements, danger */
+  --bg: #0a0a0a;              /* page background */
+  --surface: #111111;         /* panels, cards */
+  --surface-raised: #161616;  /* headers, buttons, inputs */
+  --surface-soft: #1a1a1a;    /* hover / nested surfaces */
+  --text: #f7f3ee;            /* body text */
+  --muted: #a39c93;           /* secondary text, help text */
+  --line: rgba(255, 5, 0, 0.22);        /* default borders */
+  --line-strong: rgba(255, 5, 0, 0.55); /* emphasized borders, button borders */
+  --radius-sm: 0.55rem;       /* buttons, inputs */
+  --radius: 0.85rem;          /* panels, cards */
+  --radius-lg: 1.15rem;       /* modals */
+  --shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+}
+
+
+@font-face {
+  font-family: 'NMS Futura';
+  src: url('/NMSFuturaProBook_Kerned.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Twemoji Country Flags';
+  src: url('/fonts/TwemojiCountryFlags.woff2') format('woff2');
+  font-display: swap;
+  unicode-range: U+1F1E6-1F1FF;
+}
+
+@font-face {
+  font-family: 'NMS Glyphs Mono';
+  src: url('/NMS-Glyphs-Mono-fixed2026.ttf') format('truetype');
+  /* block, not swap: never flash the hex digits in a fallback font as if they were glyphs. */
+  font-display: block;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 300px;
+  background: var(--bg);
+  scrollbar-color: var(--agt-red-orange) rgba(0, 0, 0, 0.85);
+  scrollbar-width: thin;
+}
+
+body {
+  margin: 0;
+  min-width: 300px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 8% 12%, rgba(226, 85, 48, 0.1), transparent 24rem),
+    radial-gradient(circle at 91% 32%, rgba(255, 180, 81, 0.045), transparent 28rem),
+    var(--bg);
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255, 180, 81, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 180, 81, 0.018) 1px, transparent 1px);
+  background-size: 40px 40px;
+  content: '';
+  mask-image: linear-gradient(to bottom, black, transparent 80%);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--agt-orange);
+  outline-offset: 3px;
+}
+
+::selection {
+  color: #050505;
+  background: var(--agt-orange);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(0, 0, 0, 0.85);
+  border-radius: 999px;
+  background: var(--agt-red-orange);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.button {
+  min-height: 2.45rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--agt-orange);
+  background: var(--surface-raised);
+  cursor: pointer;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.button:hover:not(:disabled) {
+  color: #fff;
+  border-color: var(--agt-red);
+  background: rgba(255, 5, 0, 0.12);
+  box-shadow: 0 0 16px rgba(255, 5, 0, 0.1);
+}
+
+.button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.button-primary {
+  color: #fff;
+  border-color: var(--agt-red);
+  background: var(--agt-red-orange);
+}
+
+.button-secondary {
+  background: rgba(22, 22, 22, 0.92);
+}
+
+.button-icon {
+  width: 2.45rem;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.45rem;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.field > span {
+  color: rgba(255, 180, 81, 0.72);
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid rgba(255, 5, 0, 0.3);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.42);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.field input,
+.field select {
+  padding: 0 0.8rem;
+}
+
+.field input::placeholder {
+  color: #6f6963;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: var(--agt-red);
+  outline: none;
+  box-shadow: 0 0 15px rgba(255, 5, 0, 0.16);
+}
+
+.field select option {
+  color: #fff;
+  background: #111;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  padding: clamp(0.5rem, 3vw, 1.5rem);
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.86);
+  backdrop-filter: blur(9px);
+  animation: fade-in 0.15s ease-out;
+}
+
+.modal-header {
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-raised);
+}
+
+.modal-header h2 {
+  margin: 0.34rem 0;
+  color: #fff;
+  font-size: clamp(1.2rem, 4vw, 2rem);
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.modal-toast {
+  position: absolute;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 1;
+  max-width: calc(100% - 2.5rem);
+  padding: 0.6rem 0.8rem;
+  visibility: hidden;
+  color: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  background: rgba(17, 17, 17, 0.96);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.64rem;
+  pointer-events: none;
+  transform: translateY(0.35rem);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+}
+
+.modal-toast.is-visible {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.modal-close {
+  flex: 0 0 auto;
+}
+
+.modal-scroll-region {
+  padding: 1.25rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.portal-glyphs {
+  font-family: 'NMS Glyphs Mono';
+  font-size: 1.5em;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  font-variant-ligatures: none;
+  white-space: nowrap;
+}
+
+.portal-code-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.empty-note,
+.loading-note,
+.error-note {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  line-height: 1.6;
+}
+
+.error-note {
+  color: #ff8b86;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.field textarea {
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(255, 5, 0, 0.3);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.42);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.field textarea:focus {
+  border-color: var(--agt-red);
+  outline: none;
+  box-shadow: 0 0 15px rgba(255, 5, 0, 0.16);
+}
+
+.field input[type='file'] {
+  padding: 0.6rem 0.8rem;
+}
+
+.field [aria-invalid='true'] {
+  border-color: var(--agt-red);
+}
+
+.field-help {
+  margin: 0;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.6rem;
+  line-height: 1.5;
+}
+
+.field-error {
+  color: #ff6b5e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.62rem;
+  line-height: 1.5;
+}
+
+.success-note {
+  color: #7bdba8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.admin-notice {
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(255, 204, 102, 0.55);
+  border-radius: var(--radius-sm);
+  color: #ffcc66;
+  background: rgba(255, 204, 102, 0.08);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.admin-notice.danger {
+  border-color: var(--line-strong);
+  color: #ff6b5e;
+  background: rgba(255, 5, 0, 0.08);
+}

@@ -20,6 +20,7 @@ AGT Event Calendar is a self-hosted calendar for events hosted by the Alliance o
 - [Content safety](#content-safety)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
+- [Credits](#credits)
 
 ## Installation
 
@@ -423,7 +424,7 @@ The goal: content from submissions, dashboard edits, migrated files or restored 
 - **External images** written with Markdown image syntax (`![alt](https://…)`) are rendered. The **visitor's browser loads them directly** from the image host, which can therefore see visitors' IP addresses; they are requested without a referrer and lazily, and a broken image does not break the description. The server never fetches, proxies or caches them, and they are not included in backups. Use `https://` image URLs: pages served over HTTPS block or upgrade `http://` images.
 - **Uploaded images** must be PNG, JPEG, WebP or GIF, checked by their actual contents (magic bytes); a declared type or file extension that doesn't match the contents is rejected. **SVG uploads are not supported**, because SVG can contain scripts. The limit is **10 MB** per image, enforced while the upload streams. Files are stored under random server-generated names and served with the detected `Content-Type` and `X-Content-Type-Options: nosniff`.
 - **Content-Security-Policy:** every response carries a CSP that allows scripts only from the app itself (`script-src 'self'`; `object-src 'none'`; `frame-ancestors 'none'`). Images may come from anywhere. The captcha's proof-of-work runs in a bundled same-origin worker.
-- **Bundled assets:** all fonts and scripts are served by the app. The country-flag font is bundled from Twemoji (CC BY 4.0, see `public/fonts/TwemojiCountryFlags-LICENSE.md`). Portal codes are drawn as portal glyphs with the bundled NMS Glyphs Mono font, next to the hexadecimal code.
+- **Bundled assets:** all fonts and scripts are served by the app; see [Credits](#credits) for the fonts and their licences. Portal codes are drawn as portal glyphs with the bundled NMS Glyphs Mono font, next to the hexadecimal code.
 
 ## Development
 
@@ -537,3 +538,11 @@ Set `server.trustProxy` to `true` or to the proxy's address, so the app sees the
 ### An external image in a description does not appear
 
 The image host must be reachable from the visitor's browser and should use `https://`. A broken image does not affect the rest of the event details.
+
+## Credits
+
+The app bundles these fonts unmodified (`public/` and `public/fonts/`), with their licence files where the licence requires one. The AGT logo is © Alliance of Galactic Travellers, all rights reserved, and is used only in AGT apps.
+
+- **NMS Futura** (`NMSFuturaProBook_Kerned.ttf`), the interface font. By No Man's Sky Community Developers & Designers (NMSCD), designer Blend3rman; licence notice © 2020 Hector Javier Gonzalez Rivera. The original game typeface is by Hello Games (No Man's Sky). Licence: [SIL Open Font License 1.1](public/fonts/NMSFuturaProBook-OFL.txt). Source: [NMSCD/No-Mans-Sky-Universal-Font](https://github.com/NMSCD/No-Mans-Sky-Universal-Font/blob/master/assets/font/NMSFuturaProBook_Kerned/Web-TT/NMSFuturaProBook_Kerned.ttf).
+- **NMS Glyphs Mono** (`NMS-Glyphs-Mono-fixed2026.ttf`), the portal glyphs. © 2017 Hello Games & Stephan van der Feest; portal glyph designs by Hello Games (No Man's Sky). Licence: [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). Source: [No Man's Sky Wiki: File:NMS-Glyphs-Mono.ttf](https://nms.miraheze.org/wiki/File:NMS-Glyphs-Mono.ttf). It is used unmodified and only non-commercially; because of its licence, this app must not be used commercially.
+- **Twemoji Country Flags** (`TwemojiCountryFlags.woff2`), the flags in the language picker. Flag artwork by Twitter, Inc. and other contributors (Twemoji), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); font packaging © 2022 TalkJS, MIT licence ([licence file](public/fonts/TwemojiCountryFlags-LICENSE.md)). Source: [talkjs/country-flag-emoji-polyfill](https://github.com/talkjs/country-flag-emoji-polyfill) 0.1.10.
