@@ -9,7 +9,8 @@ import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
 import Fastify, { LogController } from 'fastify';
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify';
-import type { FieldError } from '../src/lib/validation';
+import { fieldError } from '../src/lib/errors';
+import type { FieldError } from '../src/lib/errors';
 import type { ApiEvent, PublicSettings } from '../src/lib/api';
 import { isLegacyEventId, isUuidV4, validateAgtUsername, validateEventInput } from '../src/lib/validation';
 import { registerAdminRoutes } from './adminRoutes';
@@ -88,12 +89,35 @@ export function publicSettings(context: AppContext): PublicSettings {
   };
 }
 
-/** Field names (never values) from a request schema validation error. */
+/** JSON request bodies are limited to 2 MiB (AUTH-5); multipart uploads have their own limits. */
+const BODY_LIMIT_BYTES = 2 * 1024 * 1024;
+
+interface SchemaIssue {
+  keyword?: string;
+  instancePath?: string;
+  params?: { missingProperty?: string; additionalProperty?: string; limit?: number };
+}
+
+/**
+ * Field errors with standard codes (API-6) from a request body's schema validation. Field names and limits only,
+ * never the submitted values.
+ */
 function schemaErrorFields(validation: unknown): FieldError[] {
   if (!Array.isArray(validation)) return [];
-  return validation.map((issue: { instancePath?: string; params?: { missingProperty?: string; additionalProperty?: string } }) => {
-    const path = (issue.instancePath ?? '').replace(/^\//, '').split('/')[0];
-    return { field: path || issue.params?.missingProperty || issue.params?.additionalProperty || '(body)', message: '' };
+  return validation.map((issue: SchemaIssue) => {
+    const pathField = (issue.instancePath ?? '').replace(/^\//, '').replaceAll('/', '.');
+    const field = [pathField, issue.params?.missingProperty ?? issue.params?.additionalProperty].filter(Boolean).join('.') || '(body)';
+    const limit = issue.params?.limit;
+    switch (issue.keyword) {
+      case 'required': return fieldError(field, 'required', field);
+      case 'maxLength': return fieldError(field, 'too_long', field, { max: limit ?? 0 });
+      case 'minLength': return limit === 1 ? fieldError(field, 'required', field) : fieldError(field, 'too_short', field, { min: limit ?? 0 });
+      case 'maxItems': return fieldError(field, 'too_many', field, { max: limit ?? 0 });
+      case 'maximum': return fieldError(field, 'out_of_range', field, { max: limit ?? 0 });
+      case 'minimum': return fieldError(field, 'out_of_range', field, { min: limit ?? 0 });
+      case 'additionalProperties': case 'enum': case 'const': return fieldError(field, 'not_allowed', field);
+      default: return fieldError(field, 'invalid_format', field);
+    }
   });
 }
 
@@ -116,7 +140,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     // Request IDs link an audit entry to the server log entry of the same request.
     genReqId: () => randomUUID(),
     trustProxy: context.config.trustProxy,
-    bodyLimit: 2 * 1024 * 1024,
+    bodyLimit: BODY_LIMIT_BYTES,
   }).withTypeProvider<TypeBoxTypeProvider>();
 
   // Cookies first: the lock's onRequest hook reads the session cookie of a failed restore's recovery session.
@@ -128,11 +152,11 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
   await app.register(fastifyMultipart, { throwFileSizeLimit: true });
   await app.register(fastifyRateLimit, {
     global: false,
-    errorResponseBuilder: (_request, rate) => ({
-      statusCode: 429,
-      error: 'rate_limited',
-      message: `Too many requests. Try again in ${Math.ceil(rate.ttl / 1000)} seconds.`,
-    }),
+    // Thrown by the plugin, so the error handler answers it like every other error, with params (API-6).
+    errorResponseBuilder: (_request, rate) => {
+      const retryAfterSeconds = Math.max(1, Math.ceil(rate.ttl / 1000));
+      return new HttpError(429, 'rate_limited', `Too many requests. Try again in ${retryAfterSeconds} seconds.`, undefined, { retryAfterSeconds });
+    },
   });
 
   app.addHook('onSend', async (request, reply, payload) => {
@@ -150,7 +174,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     return payload;
   });
 
-  app.setErrorHandler((error: Error & { statusCode?: number; code?: string; validation?: unknown }, request, reply) => {
+  app.setErrorHandler((error: Error & { statusCode?: number; code?: string; validation?: unknown; validationContext?: string }, request, reply) => {
     if (error instanceof HttpError) {
       auditFailure(request, error.code, error.fields);
       const retryAfter = error.params?.retryAfterSeconds;
@@ -158,6 +182,10 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
       return reply.status(error.statusCode).send({ error: error.code, message: error.message, fields: error.fields, params: error.params });
     }
     if (error instanceof ImageRejectedError) {
+      if (error.maxBytes !== undefined) {
+        auditFailure(request, 'file_too_large');
+        return reply.status(413).send({ error: 'file_too_large', message: error.message, params: { maxBytes: error.maxBytes } });
+      }
       auditFailure(request, 'image_rejected');
       return reply.status(error.statusCode).send({ error: 'image_rejected', message: error.message });
     }
@@ -166,20 +194,25 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
       return reply.status(422).send({ error: 'archive_rejected', message: error.message });
     }
     if (error.validation) {
-      auditFailure(request, 'invalid_request', schemaErrorFields(error.validation));
+      // A body that fails its schema is a validation error with field codes (API-6, AUTH-3); bad paths and
+      // query strings are malformed requests.
+      if (error.validationContext === 'body') {
+        const fields = schemaErrorFields(error.validation);
+        auditFailure(request, 'validation_failed', fields);
+        return reply.status(400).send({ error: 'validation_failed', message: fields[0]?.message ?? error.message, fields });
+      }
+      auditFailure(request, 'invalid_request');
       return reply.status(400).send({ error: 'invalid_request', message: error.message });
     }
     if (error.code === 'FST_REQ_FILE_TOO_LARGE' || error.statusCode === 413) {
       auditFailure(request, 'file_too_large');
-      return reply.status(413).send({ error: 'file_too_large', message: 'The upload is too large.' });
-    }
-    if (error.statusCode === 429) {
-      auditFailure(request, 'rate_limited');
-      return reply.status(429).send({ error: 'rate_limited', message: error.message });
+      return reply.status(413).send({ error: 'file_too_large', message: 'The upload is too large.', params: { maxBytes: BODY_LIMIT_BYTES } });
     }
     if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
-      auditFailure(request, error.code ?? 'bad_request');
-      return reply.status(error.statusCode).send({ error: error.code ?? 'bad_request', message: error.message });
+      // Fastify's own client errors (malformed JSON, unsupported media type, …) get a standard code.
+      const code = error.statusCode === 415 ? 'multipart_required' : 'invalid_request';
+      auditFailure(request, code);
+      return reply.status(error.statusCode).send({ error: code, message: error.message });
     }
     auditFailure(request, 'internal');
     // Only the error's name, message and stack, and the route: never headers or the body (LOG-9).
@@ -438,13 +471,13 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     }
     const username = request.body.username.trim();
     const { password } = request.body;
-    const fields = [];
-    if (!username) fields.push({ field: 'username', message: 'Choose an admin username.' });
+    const fields: FieldError[] = [];
+    if (!username) fields.push(fieldError('username', 'required', 'The admin username'));
     if (password.length < MIN_PASSWORD_LENGTH) {
-      fields.push({ field: 'password', message: `The admin password must have at least ${MIN_PASSWORD_LENGTH} characters.` });
+      fields.push(fieldError('password', 'too_short', 'The admin password', { min: MIN_PASSWORD_LENGTH }));
     }
     if (secretsEqual(password, context.setupPassword)) {
-      fields.push({ field: 'password', message: 'Choose a new admin password; the setup password cannot be reused.' });
+      fields.push(fieldError('password', 'same_as_setup_password', 'The admin password'));
     }
     if (fields.length > 0) throw new HttpError(400, 'validation_failed', fields[0].message, fields);
     if (!createAdmin(context.db, username, await hashPassword(password))) {

@@ -3,6 +3,8 @@
 import type { Locale } from '../translations';
 
 const en = {
+  'error.file_required': 'Choose a file to upload.',
+  'error.invalid_status': 'The status must be one of the listed values.',
   restoreLeftovers: 'Some files set aside by the restore could not be deleted; delete them by hand: {{paths}}',
   maintenanceNotice: 'Maintenance in progress. Retrying in a moment…',
   appVersion: 'Version {{version}}',
@@ -177,6 +179,8 @@ const en = {
 export type AdminTranslations = { [Key in keyof typeof en]: string };
 
 const fr: AdminTranslations = {
+  'error.file_required': 'Choisissez un fichier à envoyer.',
+  'error.invalid_status': 'Le statut doit être l’une des valeurs proposées.',
   restoreLeftovers: 'Certains fichiers mis de côté par la restauration n’ont pas pu être supprimés ; supprimez-les à la main : {{paths}}',
   maintenanceNotice: 'Maintenance en cours. Nouvelle tentative dans un instant…',
   appVersion: 'Version {{version}}',
@@ -349,6 +353,8 @@ const fr: AdminTranslations = {
 };
 
 const de: AdminTranslations = {
+  'error.file_required': 'Wählen Sie eine Datei zum Hochladen.',
+  'error.invalid_status': 'Der Status muss einer der aufgeführten Werte sein.',
   restoreLeftovers: 'Einige von der Wiederherstellung beiseitegelegte Dateien konnten nicht gelöscht werden; löschen Sie sie von Hand: {{paths}}',
   maintenanceNotice: 'Wartung läuft. Neuer Versuch in Kürze…',
   appVersion: 'Version {{version}}',
@@ -521,6 +527,8 @@ const de: AdminTranslations = {
 };
 
 const es: AdminTranslations = {
+  'error.file_required': 'Elige un archivo para subir.',
+  'error.invalid_status': 'El estado debe ser uno de los valores indicados.',
   restoreLeftovers: 'No se pudieron eliminar algunos archivos apartados por la restauración; elimínalos a mano: {{paths}}',
   maintenanceNotice: 'Mantenimiento en curso. Reintentando en un momento…',
   appVersion: 'Versión {{version}}',
@@ -693,6 +701,8 @@ const es: AdminTranslations = {
 };
 
 const pt: AdminTranslations = {
+  'error.file_required': 'Escolha um arquivo para enviar.',
+  'error.invalid_status': 'O status deve ser um dos valores listados.',
   restoreLeftovers: 'Alguns arquivos deixados de lado pela restauração não puderam ser excluídos; exclua-os manualmente: {{paths}}',
   maintenanceNotice: 'Manutenção em andamento. Tentando novamente em instantes…',
   appVersion: 'Versão {{version}}',
@@ -865,6 +875,8 @@ const pt: AdminTranslations = {
 };
 
 const it: AdminTranslations = {
+  'error.file_required': 'Scegli un file da caricare.',
+  'error.invalid_status': 'Lo stato deve essere uno dei valori elencati.',
   restoreLeftovers: 'Alcuni file messi da parte dal ripristino non sono stati eliminati; eliminali a mano: {{paths}}',
   maintenanceNotice: 'Manutenzione in corso. Nuovo tentativo tra un momento…',
   appVersion: 'Versione {{version}}',
@@ -1037,6 +1049,8 @@ const it: AdminTranslations = {
 };
 
 const th: AdminTranslations = {
+  'error.file_required': 'โปรดเลือกไฟล์ที่จะอัปโหลด',
+  'error.invalid_status': 'สถานะต้องเป็นหนึ่งในค่าที่ระบุไว้',
   restoreLeftovers: 'ไม่สามารถลบไฟล์บางไฟล์ที่การกู้คืนพักไว้ได้ โปรดลบด้วยตนเอง: {{paths}}',
   maintenanceNotice: 'กำลังปรับปรุงระบบ จะลองใหม่อีกครั้งในอีกสักครู่…',
   appVersion: 'เวอร์ชัน {{version}}',
@@ -1209,6 +1223,8 @@ const th: AdminTranslations = {
 };
 
 const zh: AdminTranslations = {
+  'error.file_required': '请选择要上传的文件。',
+  'error.invalid_status': '状态必须是列出的值之一。',
   restoreLeftovers: '恢复时暂存的部分文件无法删除，请手动删除：{{paths}}',
   maintenanceNotice: '正在维护中，稍后将自动重试…',
   appVersion: '版本 {{version}}',
@@ -1381,6 +1397,8 @@ const zh: AdminTranslations = {
 };
 
 const hi: AdminTranslations = {
+  'error.file_required': 'अपलोड करने के लिए एक फ़ाइल चुनें।',
+  'error.invalid_status': 'स्थिति सूचीबद्ध मानों में से एक होनी चाहिए।',
   restoreLeftovers: 'रिस्टोर द्वारा अलग रखी गई कुछ फ़ाइलें हटाई नहीं जा सकीं; उन्हें स्वयं हटाएँ: {{paths}}',
   maintenanceNotice: 'रखरखाव जारी है। कुछ ही क्षणों में फिर से प्रयास किया जाएगा…',
   appVersion: 'संस्करण {{version}}',
@@ -1553,6 +1571,8 @@ const hi: AdminTranslations = {
 };
 
 const ja: AdminTranslations = {
+  'error.file_required': 'アップロードするファイルを選択してください。',
+  'error.invalid_status': 'ステータスは一覧の値のいずれかにしてください。',
   restoreLeftovers: '復元で退避した一部のファイルを削除できませんでした。手動で削除してください: {{paths}}',
   maintenanceNotice: 'メンテナンス中です。まもなく再試行します…',
   appVersion: 'バージョン {{version}}',

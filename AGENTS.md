@@ -69,6 +69,7 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 | `server/test/` | `node:test` + Fastify `inject()`; `helpers.ts`; `fixtures/amplify-migration/` is the reference ZIP |
 | `src/App.tsx` | Calendar root: API loading, filters, modals, bookmarks, `?event_id=` deep links (legacy IDs → UUID) |
 | `src/lib/validation.ts` | **Shared** validation (server + browser). Change rules here only |
+| `src/lib/errors.ts` | Error and field codes, `fieldError()`, and the translated `errorText()` / `fieldErrorText()` |
 | `src/lib/api.ts`, `src/lib/client.ts` | API types/helpers and the browser fetch wrapper (`cache: 'no-store'`) |
 | `src/lib/csv.ts`, `src/lib/holidays.ts` | Legacy CSV parsing, used only by Migrate from Amplify |
 | `src/components/Markdown.tsx` | The only Markdown renderer. Raw HTML → text, HTTP(S) URLs only |
@@ -88,6 +89,12 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
   exist, non-empty, in all 10 locales. `translations.test.ts` and `adminTranslations.test.ts` enforce this.
   Find locale blocks with `grep -n "^const [a-z]*: Translations" src/translations.ts`. Brand names that are
   never translated go in `COMMON_TRANSLATIONS`. Interpolate with `formatTranslation(template, { key })`.
+- **Errors (API-6, I18N-6):** the server sends an `error` code, English `message` and `params`; field errors and
+  `notices` are `FieldError { field, code, message, params? }` built with `fieldError()` from `src/lib/errors.ts`
+  (standard codes first; app-specific ones go in `ERROR_CODES` / `ADMIN_ERROR_CODES` / `FIELD_CODES`). Every code needs an
+  `'error.<code>'` / `'field.<code>'` string in all 10 locales (`src/translations.ts`; admin-only codes in
+  `src/admin/i18n.ts`). The client shows errors only through `errorText()` / `fieldErrorText()` (admin:
+  `errorMessage(error, admin)` / `fieldMessage()` from `src/admin/context.ts`), never `error.message` directly.
 - **No hardcoded UI text** in components — use `getTranslations(locale)` / `getAdminTranslations(locale)`.
   Server error messages are English.
 - **Content safety (do not weaken):** never add `rehype-raw` or any plugin that turns raw HTML into elements,

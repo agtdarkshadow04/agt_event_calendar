@@ -18,7 +18,8 @@ export function statusLabel(t: AdminTranslations, status: EventStatus): string {
 }
 
 function EventEditor({ event, onSaved, onCancel }: { event: AdminApiEvent | null; onSaved: () => void; onCancel: () => void }) {
-  const { t, pt, timeZone, timeZoneOffset } = useAdmin();
+  const admin = useAdmin();
+  const { t, pt, timeZone, timeZoneOffset } = admin;
   const [form, setForm] = useState<EventFormState>(event ? eventFormFromApi(event, timeZoneOffset) : EMPTY_EVENT_FORM);
   const [status, setStatus] = useState<EventStatus>(event?.status ?? 'unpublished');
   const [coverImageId, setCoverImageId] = useState<string>(event?.coverImageId ?? '');
@@ -40,7 +41,7 @@ function EventEditor({ event, onSaved, onCancel }: { event: AdminApiEvent | null
       setCoverImageId(image.id);
       setMessage('');
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, admin));
     }
   };
 
@@ -62,7 +63,7 @@ function EventEditor({ event, onSaved, onCancel }: { event: AdminApiEvent | null
       onSaved();
     } catch (error) {
       if (error instanceof ApiError && error.fields) setErrors(error.fields);
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, admin));
     } finally {
       setBusy(false);
     }
@@ -111,7 +112,8 @@ function EventEditor({ event, onSaved, onCancel }: { event: AdminApiEvent | null
 }
 
 export function EventsPanel({ moderation, onChanged }: { moderation: boolean; onChanged: () => void }) {
-  const { t, locale } = useAdmin();
+  const admin = useAdmin();
+  const { t, locale } = admin;
   const [events, setEvents] = useState<AdminApiEvent[]>([]);
   const [filter, setFilter] = useState<EventStatus | ''>(moderation ? 'pending' : '');
   const [editing, setEditing] = useState<AdminApiEvent | 'new' | null>(null);
@@ -123,7 +125,7 @@ export function EventsPanel({ moderation, onChanged }: { moderation: boolean; on
       setEvents(await apiRequest<AdminApiEvent[]>(`/api/admin/events${query}`));
       setMessage('');
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, admin));
     }
   }, [filter, moderation]);
 
@@ -137,7 +139,7 @@ export function EventsPanel({ moderation, onChanged }: { moderation: boolean; on
       await load();
       onChanged();
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, admin));
     }
   };
   const setStatus = (event: AdminApiEvent, status: EventStatus) =>

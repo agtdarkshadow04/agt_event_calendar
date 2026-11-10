@@ -5,8 +5,10 @@
  *
  * Everything in this module is pure: no DOM, no Node APIs.
  */
-import { formatTranslation, getTranslations } from '../translations';
+import { getTranslations } from '../translations';
 import type { Translations } from '../translations';
+import { fieldError } from './errors';
+import type { FieldError } from './errors';
 
 export const EVENT_STATUSES = ['published', 'unpublished', 'pending', 'rejected'] as const;
 export type EventStatus = (typeof EVENT_STATUSES)[number];
@@ -94,9 +96,14 @@ export function isIsoDate(value: string): boolean {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-export interface FieldError {
-  field: string;
-  message: string;
+export type { FieldError } from './errors';
+
+/**
+ * Keeps a more specific `message` than the code's generic text: the message is what Migrate from Amplify reports and
+ * API clients read, while the UI shows the code's translated text (I18N-6).
+ */
+function detailed(error: FieldError, message: string): FieldError {
+  return { ...error, message };
 }
 
 export type ValidationResult<T> =
@@ -152,17 +159,12 @@ export function validateEventInput(
   const required = (field: string, label: string): string => {
     const value = text(raw[field]);
     if (!value) {
-      errors.push({ field, message: formatTranslation(translations.fieldRequired, { field: label }) });
+      errors.push(fieldError(field, 'required', label, undefined, translations));
     }
     return value;
   };
   const maxLength = (field: string, label: string, value: string | null, max: number) => {
-    if (value && value.length > max) {
-      errors.push({
-        field,
-        message: formatTranslation(translations.fieldTooLong, { field: label, max }),
-      });
-    }
+    if (value && value.length > max) errors.push(fieldError(field, 'too_long', label, { max }, translations));
   };
 
   const name = required('name', 'EVENT_NAME');
@@ -182,21 +184,21 @@ export function validateEventInput(
 
   const portalCode = required('portalCode', 'EVENT_PORTAL_CODE').toUpperCase();
   if (portalCode && !PORTAL_CODE_PATTERN.test(portalCode)) {
-    errors.push({ field: 'portalCode', message: translations.portalCodeLength });
+    errors.push(detailed(fieldError('portalCode', 'invalid_format', 'EVENT_PORTAL_CODE', undefined, translations), translations.portalCodeLength));
   }
 
   const startText = required('start', 'EVENT_DATETIME_START');
   const start = startText ? parseUtcTimestamp(startText) : null;
   if (startText && !start) {
-    errors.push({ field: 'start', message: translations.startUtcTimestamp });
+    errors.push(detailed(fieldError('start', 'invalid_format', 'EVENT_DATETIME_START', undefined, translations), translations.startUtcTimestamp));
   }
   const endText = text(raw.end);
   const end = endText ? parseUtcTimestamp(endText) : null;
   if (endText && !end) {
-    errors.push({ field: 'end', message: translations.endUtcTimestamp });
+    errors.push(detailed(fieldError('end', 'invalid_format', 'EVENT_DATETIME_END', undefined, translations), translations.endUtcTimestamp));
   }
   if (start && end && end.getTime() < start.getTime()) {
-    errors.push({ field: 'end', message: translations.endBeforeStart });
+    errors.push(fieldError('end', 'end_before_start', 'EVENT_DATETIME_END', undefined, translations));
   }
 
   const description = markdown(raw.description);
@@ -208,17 +210,11 @@ export function validateEventInput(
     if (safe) {
       if (!links.includes(safe)) links.push(safe);
     } else {
-      notices.push({
-        field: 'links',
-        message: formatTranslation(translations.invalidRelatedLink, { value }),
-      });
+      notices.push(fieldError('links', 'link_ignored', 'EVENT_RELATED_LINKS', { value }, translations));
     }
   }
   if (links.length > LIMITS.links) {
-    errors.push({
-      field: 'links',
-      message: formatTranslation(translations.tooManyLinks, { max: LIMITS.links }),
-    });
+    errors.push(fieldError('links', 'too_many', 'EVENT_RELATED_LINKS', { max: LIMITS.links }, translations));
   }
 
   if (errors.length > 0 || !start) return { ok: false, errors, notices };
@@ -249,18 +245,9 @@ export function validateAgtUsername(
   const username = text(value);
   const errors: FieldError[] = [];
   if (!username) {
-    errors.push({
-      field: 'agtUsername',
-      message: formatTranslation(translations.fieldRequired, { field: translations.agtUsername }),
-    });
+    errors.push(fieldError('agtUsername', 'required', translations.agtUsername, undefined, translations));
   } else if (username.length > LIMITS.agtUsername) {
-    errors.push({
-      field: 'agtUsername',
-      message: formatTranslation(translations.fieldTooLong, {
-        field: translations.agtUsername,
-        max: LIMITS.agtUsername,
-      }),
-    });
+    errors.push(fieldError('agtUsername', 'too_long', translations.agtUsername, { max: LIMITS.agtUsername }, translations));
   }
   return errors.length > 0
     ? { ok: false, errors, notices: [] }
@@ -293,16 +280,13 @@ export function validateHolidayInput(
   };
   for (const field of Object.keys(labels) as (keyof HolidayInput)[]) {
     if (!value[field]) {
-      errors.push({ field, message: formatTranslation(translations.fieldRequired, { field: labels[field] }) });
+      errors.push(fieldError(field, 'required', labels[field], undefined, translations));
     } else if (value[field].length > LIMITS.holidayText) {
-      errors.push({
-        field,
-        message: formatTranslation(translations.fieldTooLong, { field: labels[field], max: LIMITS.holidayText }),
-      });
+      errors.push(fieldError(field, 'too_long', labels[field], { max: LIMITS.holidayText }, translations));
     }
   }
   if (value.date && !isIsoDate(value.date)) {
-    errors.push({ field: 'date', message: translations.holidayDateFormat });
+    errors.push(detailed(fieldError('date', 'invalid_format', labels.date, undefined, translations), translations.holidayDateFormat));
   }
   return errors.length > 0 ? { ok: false, errors, notices: [] } : { ok: true, value, notices: [] };
 }
@@ -320,17 +304,14 @@ export function validateChangeLogInput(
   const date = text(raw.date);
   const changes = text(raw.changes);
   if (!date) {
-    errors.push({ field: 'date', message: formatTranslation(translations.fieldRequired, { field: 'Date' }) });
+    errors.push(fieldError('date', 'required', 'Date', undefined, translations));
   } else if (!isIsoDate(date)) {
-    errors.push({ field: 'date', message: translations.holidayDateFormat });
+    errors.push(detailed(fieldError('date', 'invalid_format', 'Date', undefined, translations), translations.holidayDateFormat));
   }
   if (!changes) {
-    errors.push({ field: 'changes', message: formatTranslation(translations.fieldRequired, { field: 'Changes' }) });
+    errors.push(fieldError('changes', 'required', 'Changes', undefined, translations));
   } else if (changes.length > LIMITS.changes) {
-    errors.push({
-      field: 'changes',
-      message: formatTranslation(translations.fieldTooLong, { field: 'Changes', max: LIMITS.changes }),
-    });
+    errors.push(fieldError('changes', 'too_long', 'Changes', { max: LIMITS.changes }, translations));
   }
   return errors.length > 0
     ? { ok: false, errors, notices: [] }

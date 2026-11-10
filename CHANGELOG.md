@@ -24,6 +24,12 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
   same way. Only if the proxy runs on another machine, set `server.host` (local) or the published address (Docker) to
   an interface it can reach, and firewall that port to the proxy
   ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
+- **API clients: error bodies changed.** Every field error (and every `notices` entry) now has a `code` and, where
+  needed, `params`, besides `field` and `message`. A request body that fails its schema now gets `400
+  validation_failed` with `fields` (was `400 invalid_request` without them). An image over the size limit gets `413
+  file_too_large` with `params.maxBytes` (was `413 image_rejected`). `rate_limited`, `file_too_large`,
+  `field_too_large` and `defined_in_config` carry `params`. Clients that show `message` keep working
+  ([#63](https://github.com/agtdarkshadow04/agt_event_calendar/issues/63)).
 - **`altcha.hmacKey` is ignored.** The captcha key is now always generated and stored in the database. If
   `config.yaml` sets it, remove the line: the server log warns at every startup until you do, and a later release
   will reject it as an unknown key. Captcha challenges issued before the upgrade fail once, and visitors verify again
@@ -46,6 +52,9 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
   for a change that waited more than 30 seconds for a backup. `GET /api/health` returns `{ "status": "maintenance" }`
   during a restore. The calendar and the dashboard show a non-blocking "Maintenance in progress" notice and retry the
   request once ([#61](https://github.com/agtdarkshadow04/agt_event_calendar/issues/61)).
+- Errors are shown in the user's language everywhere: the calendar and the dashboard translate every error code and
+  field code (all 10 languages) instead of showing the server's English message, which remains the fallback for a code
+  they don't know ([#63](https://github.com/agtdarkshadow04/agt_event_calendar/issues/63)).
 - A failed restore rolls back: the previous database and uploads, set aside as `<name>.restore-old-<timestamp>`, are put
   back, and the request gets `500` "The restore failed and was rolled back. Nothing was changed." If the rollback
   fails too, the app stays in maintenance, writes `restore-failed.json` in the data directory and refuses to start

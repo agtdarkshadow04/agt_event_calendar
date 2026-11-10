@@ -4,7 +4,8 @@ import { apiRequest } from '../lib/client';
 import { errorMessage, useAdmin } from './context';
 
 export function AccountPanel() {
-  const { t } = useAdmin();
+  const admin = useAdmin();
+  const { t } = admin;
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -23,7 +24,7 @@ export function AccountPanel() {
       setConfirm('');
       setMessage({ error: false, text: t.passwordChanged });
     } catch (error) {
-      setMessage({ error: true, text: errorMessage(error) });
+      setMessage({ error: true, text: errorMessage(error, admin) });
     }
   };
 

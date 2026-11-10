@@ -19,7 +19,8 @@ export const LOG_PAGE_SIZE = 50;
  * "Newer entries" can go back; changing the filters or `reloadKey` starts over.
  */
 export function useLogPage<T>(endpoint: string, filters: Record<string, string>, reloadKey: number) {
-  const { timeZoneOffset } = useAdmin();
+  const admin = useAdmin();
+  const { timeZoneOffset } = admin;
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [page, setPage] = useState<LogPage<T>>({ items: [], nextCursor: null });
   const [error, setError] = useState('');
@@ -41,7 +42,7 @@ export function useLogPage<T>(endpoint: string, filters: Record<string, string>,
         setError('');
       })
       .catch((failure: unknown) => {
-        if (!cancelled) setError(errorMessage(failure));
+        if (!cancelled) setError(errorMessage(failure, admin));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -77,7 +78,8 @@ export function LogPager({ hasNewer, hasOlder, onNewer, onOlder }: { hasNewer: b
 
 /** Downloads the current filter as JSON Lines or CSV, generated and streamed by the server. */
 export function LogExportButtons({ endpoint, filters, kind }: { endpoint: string; filters: Record<string, string>; kind: 'server' | 'audit' }) {
-  const { t, timeZoneOffset } = useAdmin();
+  const admin = useAdmin();
+  const { t, timeZoneOffset } = admin;
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const download = async (format: 'jsonl' | 'csv') => {
@@ -90,7 +92,7 @@ export function LogExportButtons({ endpoint, filters, kind }: { endpoint: string
       downloadBlob(blob, fileName);
       setMessage('');
     } catch (failure) {
-      setMessage(errorMessage(failure));
+      setMessage(errorMessage(failure, admin));
     } finally {
       setBusy(false);
     }

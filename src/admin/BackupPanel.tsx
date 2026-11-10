@@ -18,7 +18,8 @@ interface RestoreReport {
 }
 
 export function BackupPanel({ onSessionEnded }: { onSessionEnded: (notice: string) => void }) {
-  const { t, locale } = useAdmin();
+  const admin = useAdmin();
+  const { t, locale } = admin;
   const [file, setFile] = useState<File | null>(null);
   const [report, setReport] = useState<RestoreReport | null>(null);
   const [confirmed, setConfirmed] = useState(false);
@@ -37,7 +38,7 @@ export function BackupPanel({ onSessionEnded }: { onSessionEnded: (notice: strin
       const { blob, fileName } = await apiDownload('/api/admin/backup', 'agt-event-calendar-backup.zip');
       downloadBlob(blob, fileName);
     } catch (error) {
-      setDownloadError(errorMessage(error));
+      setDownloadError(errorMessage(error, admin));
     } finally {
       setDownloading(false);
     }
@@ -64,7 +65,7 @@ export function BackupPanel({ onSessionEnded }: { onSessionEnded: (notice: strin
       setReport(result);
     } catch (error) {
       setReport(null);
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, admin));
     } finally {
       setBusy(false);
     }

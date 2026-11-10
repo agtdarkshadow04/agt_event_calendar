@@ -121,7 +121,9 @@ describe('admin route protection', () => {
       method: 'POST', url: '/api/admin/holidays', headers: { cookie, ...CSRF }, payload: { name: 'x', unexpected: true },
     });
     assert.equal(response.statusCode, 400);
-    assert.equal(response.json().error, 'invalid_request');
+    assert.equal(response.json().error, 'validation_failed');
     assert.equal(typeof response.json().message, 'string');
+    // Unknown properties are removed; the first missing one is reported with its field code (API-6).
+    assert.deepEqual(response.json().fields, [{ field: 'civilization', code: 'required', message: 'civilization is required.' }]);
   });
 });

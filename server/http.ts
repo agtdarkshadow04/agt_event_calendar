@@ -27,6 +27,9 @@ export function isLoopbackAddress(ip: string): boolean {
   return address === '::1' || address === '0:0:0:0:0:0:0:1';
 }
 
+/** Largest non-file field of a multipart request. */
+export const MAX_FIELD_BYTES = 1024 * 1024;
+
 export interface UploadedFile {
   fieldName: string;
   fileName: string;
@@ -58,14 +61,17 @@ export async function readMultipart(
   const cleanup = () => {
     if (tempDir) rmSync(tempDir, { recursive: true, force: true });
   };
-  const tooLarge = () => new HttpError(413, 'file_too_large', `The uploaded file is larger than the ${formatMegabytes(options.maxFileBytes)} limit.`);
+  const tooLarge = () => new HttpError(413, 'file_too_large',
+    `The uploaded file is larger than the ${formatMegabytes(options.maxFileBytes)} limit.`, undefined, { maxBytes: options.maxFileBytes });
   try {
     const parts = request.parts({
-      limits: { fileSize: options.maxFileBytes, files: options.fileFields.length, fields: 50, fieldSize: 1024 * 1024 },
+      limits: { fileSize: options.maxFileBytes, files: options.fileFields.length, fields: 50, fieldSize: MAX_FIELD_BYTES },
     });
     for await (const part of parts) {
       if (part.type === 'field') {
-        if (part.valueTruncated) throw new HttpError(413, 'field_too_large', `The field ${part.fieldname} is too large.`);
+        if (part.valueTruncated) {
+          throw new HttpError(413, 'field_too_large', `The field ${part.fieldname} is too large.`, undefined, { maxBytes: MAX_FIELD_BYTES });
+        }
         fields[part.fieldname] = String(part.value);
         continue;
       }

@@ -1,4 +1,6 @@
 import { createContext, useContext } from 'react';
+import { errorText, fieldErrorText } from '../lib/errors';
+import type { FieldError } from '../lib/errors';
 import type { Translations } from '../translations';
 import type { AdminTranslations } from './i18n';
 
@@ -32,6 +34,12 @@ export function downloadBlob(blob: Blob, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+/** An error in the dashboard's language (I18N-6): admin-only codes from `t`, every other code from `pt`. */
+export function errorMessage(error: unknown, value: Pick<AdminContextValue, 't' | 'pt'>): string {
+  return errorText(error, { ...value.pt, ...value.t });
+}
+
+/** A field error in the dashboard's language, with the translated field label. */
+export function fieldMessage(error: FieldError, label: string, value: Pick<AdminContextValue, 't' | 'pt'>): string {
+  return fieldErrorText(error, label, { ...value.pt, ...value.t });
 }
