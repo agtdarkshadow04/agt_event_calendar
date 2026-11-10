@@ -61,6 +61,8 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
   until it is removed. Until then, the admin who started the restore can recover from the same session with a new
   restore. The README's Troubleshooting section explains both, and the manual recovery
   ([#62](https://github.com/agtdarkshadow04/agt_event_calendar/issues/62)).
+- The NMS Futura licence (`public/fonts/NMSFuturaProBook-OFL.txt`) is shipped with the font, and the README credits
+  every bundled font ([#64](https://github.com/agtdarkshadow04/agt_event_calendar/issues/64)).
 - `package.json` approves the install scripts of `better-sqlite3` and `esbuild` in `allowScripts`, so `npm ci` behaves
   the same with npm 11.20 and newer ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
 
@@ -79,6 +81,9 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
   references, schema version, tables and referenced images) and then commits, removing locked settings and sessions
   in one transaction. Set-aside paths that cannot be deleted no longer fail the restore; they are listed as
   `warnings` in its result and in the server log ([#62](https://github.com/agtdarkshadow04/agt_event_calendar/issues/62)).
+- The calendar and dashboard use the AGT base stylesheet (`src/agt-base.css`, copied unmodified from the spec), which
+  also brings the darker primary-button colour `--agt-red-orange: #cb4c2b` for contrast
+  ([#64](https://github.com/agtdarkshadow04/agt_event_calendar/issues/64)).
 - The captcha key is generated at startup, and after a restore whose data has none, instead of by the first captcha
   request ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
 - While no admin exists, an `AGT_SETUP_PASSWORD` longer than 1024 characters stops the server with a clear message
@@ -88,6 +93,11 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 - `altcha.hmacKey` in `config.yaml`: accepted but ignored, with a startup warning
   ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
+
+### Removed
+
+- The unused NMS Alphabet font (`public/nms-alphabet.ttf`): its licence does not allow hosting it as a web font
+  ([#64](https://github.com/agtdarkshadow04/agt_event_calendar/issues/64)).
 
 ### Security
 

@@ -241,24 +241,8 @@
   overflow-wrap: anywhere;
 }
 
-.admin-notice {
-  padding: 0.85rem 1rem;
-  border: 1px solid rgba(255, 204, 102, 0.55);
-  border-radius: var(--radius-sm);
-  color: #ffcc66;
-  background: rgba(255, 204, 102, 0.08);
-  font-size: 0.75rem;
-  line-height: 1.6;
-}
-
 .admin-notice.maintenance-notice {
   margin: 0 clamp(0.75rem, 3vw, 2rem);
-}
-
-.admin-notice.danger {
-  border-color: var(--line-strong);
-  color: #ff6b5e;
-  background: rgba(255, 5, 0, 0.08);
 }
 
 .admin-auth {
