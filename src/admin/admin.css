@@ -23,6 +23,13 @@
   text-transform: uppercase;
 }
 
+.admin-version {
+  color: var(--muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
 .admin-header-actions {
   display: flex;
   align-items: center;

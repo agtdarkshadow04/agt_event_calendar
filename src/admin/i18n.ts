@@ -3,6 +3,7 @@
 import type { Locale } from '../translations';
 
 const en = {
+  appVersion: 'Version {{version}}',
   title: 'Admin dashboard',
   viewSite: 'View calendar',
   loading: 'Loading…',
@@ -174,6 +175,7 @@ const en = {
 export type AdminTranslations = { [Key in keyof typeof en]: string };
 
 const fr: AdminTranslations = {
+  appVersion: 'Version {{version}}',
   title: 'Tableau de bord d’administration',
   viewSite: 'Voir le calendrier',
   loading: 'Chargement…',
@@ -343,6 +345,7 @@ const fr: AdminTranslations = {
 };
 
 const de: AdminTranslations = {
+  appVersion: 'Version {{version}}',
   title: 'Admin-Dashboard',
   viewSite: 'Kalender ansehen',
   loading: 'Wird geladen…',
@@ -512,6 +515,7 @@ const de: AdminTranslations = {
 };
 
 const es: AdminTranslations = {
+  appVersion: 'Versión {{version}}',
   title: 'Panel de administración',
   viewSite: 'Ver calendario',
   loading: 'Cargando…',
@@ -681,6 +685,7 @@ const es: AdminTranslations = {
 };
 
 const pt: AdminTranslations = {
+  appVersion: 'Versão {{version}}',
   title: 'Painel de administração',
   viewSite: 'Ver calendário',
   loading: 'Carregando…',
@@ -850,6 +855,7 @@ const pt: AdminTranslations = {
 };
 
 const it: AdminTranslations = {
+  appVersion: 'Versione {{version}}',
   title: 'Pannello di amministrazione',
   viewSite: 'Vedi calendario',
   loading: 'Caricamento…',
@@ -1019,6 +1025,7 @@ const it: AdminTranslations = {
 };
 
 const th: AdminTranslations = {
+  appVersion: 'เวอร์ชัน {{version}}',
   title: 'แดชบอร์ดผู้ดูแลระบบ',
   viewSite: 'ดูปฏิทิน',
   loading: 'กำลังโหลด…',
@@ -1188,6 +1195,7 @@ const th: AdminTranslations = {
 };
 
 const zh: AdminTranslations = {
+  appVersion: '版本 {{version}}',
   title: '管理后台',
   viewSite: '查看日历',
   loading: '正在加载…',
@@ -1357,6 +1365,7 @@ const zh: AdminTranslations = {
 };
 
 const hi: AdminTranslations = {
+  appVersion: 'संस्करण {{version}}',
   title: 'व्यवस्थापक डैशबोर्ड',
   viewSite: 'कैलेंडर देखें',
   loading: 'लोड हो रहा है…',
@@ -1526,6 +1535,7 @@ const hi: AdminTranslations = {
 };
 
 const ja: AdminTranslations = {
+  appVersion: 'バージョン {{version}}',
   title: '管理ダッシュボード',
   viewSite: 'カレンダーを表示',
   loading: '読み込み中…',

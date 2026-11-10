@@ -20,7 +20,7 @@ type Phase =
   | { kind: 'error'; message: string }
   | { kind: 'setup'; setupPasswordConfigured: boolean }
   | { kind: 'login' }
-  | { kind: 'dashboard'; username: string; setupPasswordStillSet: boolean };
+  | { kind: 'dashboard'; username: string; setupPasswordStillSet: boolean; version: string };
 
 const TABS = [
   'events', 'moderation', 'holidays', 'changelog', 'images', 'settings', 'serverLog', 'auditLog', 'migrate', 'backup', 'account',
@@ -149,8 +149,13 @@ export function AdminApp() {
         return;
       }
       try {
-        const session = await apiRequest<{ username: string; setupPasswordStillSet: boolean }>('/api/admin/session');
-        setPhase({ kind: 'dashboard', username: session.username, setupPasswordStillSet: session.setupPasswordStillSet });
+        const session = await apiRequest<{ username: string; setupPasswordStillSet: boolean; version: string }>('/api/admin/session');
+        setPhase({
+          kind: 'dashboard',
+          username: session.username,
+          setupPasswordStillSet: session.setupPasswordStillSet,
+          version: session.version,
+        });
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) setPhase({ kind: 'login' });
         else throw error;
@@ -235,6 +240,9 @@ export function AdminApp() {
           <div className="brand-lockup">
             <img className="agt-emblem" src="/AgtOfficialLogo.webp" alt="" aria-hidden="true" />
             <h1>{t.title}</h1>
+            {phase.kind === 'dashboard' && (
+              <span className="admin-version">{formatTranslation(t.appVersion, { version: phase.version })}</span>
+            )}
           </div>
           <div className="admin-header-actions">
             <a href="/">{t.viewSite}</a>
