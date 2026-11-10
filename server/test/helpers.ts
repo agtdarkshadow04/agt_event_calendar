@@ -9,6 +9,7 @@ import { buildApp } from '../app';
 import { parseConfigText, resolveConfig } from '../config';
 import type { AppContext } from '../context';
 import { openDatabase } from '../db';
+import { LogStore } from '../logs';
 import { writeZip } from '../zip';
 
 export const SETUP_PASSWORD = 'temporary-setup-password';
@@ -33,6 +34,7 @@ export async function createTestServer(
   const context: AppContext = {
     config,
     db: openDatabase(config.databaseFile),
+    logs: LogStore.open(config.logDatabaseFile),
     setupPassword: options.setupPassword === undefined ? SETUP_PASSWORD : options.setupPassword,
     version: 'test',
   };
@@ -44,6 +46,7 @@ export async function createTestServer(
     close: async () => {
       await app.close();
       context.db.close();
+      context.logs.close();
       rmSync(dir, { recursive: true, force: true });
     },
   };

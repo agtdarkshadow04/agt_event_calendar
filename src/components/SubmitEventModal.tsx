@@ -126,6 +126,7 @@ export default function SubmitEventModal({
           <form ref={formRef} className="submit-form" onSubmit={(event) => void submit(event)} noValidate>
             <div className="settings-scroll-region">
               <p className="field-help">{translations.submissionIntro}</p>
+              <p className="field-help">{translations.submissionLoggingNotice}</p>
               <div className="form-grid">
                 <label className="field span-2">
                   <span>{translations.agtUsername} *</span>

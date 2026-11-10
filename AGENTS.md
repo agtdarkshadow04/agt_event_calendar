@@ -48,6 +48,10 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 | `server/index.ts` | Entry point: loads `config.yaml` (`AGT_CONFIG_FILE`), opens the DB, reads `AGT_SETUP_PASSWORD`, listens |
 | `server/app.ts` | `buildApp()`: security headers/CSP, error handling, public API, submissions, setup, login, static SPA |
 | `server/adminRoutes.ts` | Admin-only API (session + `x-agt-request: 1` CSRF header required) |
+| `server/logs.ts`, `server/migrations/logs/*.sql` | Log store (`logs.sqlite`, own `LOG_MIGRATIONS`): server log, audit log, pino logger, retention, export. All log SQL |
+| `server/audit.ts` | The single `onResponse` audit hook, `setAudit()`, IP hashing via the log store |
+| `server/logRoutes.ts` | Admin log API (`/api/admin/logs/*`); no route edits or deletes audit entries |
+| `server/startup.ts` | Server log entries written at startup (version, migrations, config and setup-password warnings) |
 | `server/openapi.ts`, `server/schemas.ts` | `@fastify/swagger` setup (`/api/openapi.json`) and the TypeBox schemas of every route |
 | `server/config.ts` | TypeBox schema for `config.yaml` and `EDITABLE_SETTINGS` (dashboard-editable keys) |
 | `server/context.ts` | `AppContext` and settings precedence: **config file > dashboard > default** |
@@ -66,6 +70,7 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 | `src/components/PortalGlyphs.tsx` | Portal codes as glyphs (NMS Glyphs Mono), only for 12-hex-digit codes |
 | `src/components/SubmitEventModal.tsx`, `altcha.ts` | Public submission form with the bundled ALTCHA widget (lazy-loaded) |
 | `src/admin/` | Admin dashboard; strings in `src/admin/i18n.ts` |
+| `src/admin/ServerLogPanel.tsx`, `AuditLogPanel.tsx`, `LogShared.tsx` | Server log and Audit log tabs (filters, paging, export, details); helpers in `src/lib/logs.ts` |
 | `src/translations.ts` | Public UI strings for 10 locales (~2000 lines — grep, don't read whole) |
 | `src/styles.css` | All public styling (grep for the class you need); admin styles in `src/admin/admin.css` |
 | `public/` | Static assets incl. the bundled fonts (NMS Futura, NMS Glyphs Mono, flags). Large binaries — don't open |
@@ -107,6 +112,12 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 - **Admin CRUD responses:** create → `201 { <resource>, notices }`, replace → `200 { <resource>, notices }`,
   delete → `204` with no body. A breaking API change bumps the major version in `package.json`.
 - **Portal codes** are shown with `<PortalGlyphs>` next to the hex text; never use the glyph font for other text.
+- **Logging:** user actions go to the audit log, never `request.log.info`. Handlers describe the change with
+  `setAudit(request, { targetType, targetId, actor?, details })` (`server/audit.ts`); the `onResponse` hook audits every
+  non-GET `/api/` route, every GET route with `config: { audit: true }` (downloads, exports) and every 401/403/429.
+  `details` holds names, changed field names and counts, never passwords, Markdown bodies, file contents or the values
+  of failed fields. Server-caused events use `app.log` with a `source` (`startup`, `config`, `migrations`, …); `info`
+  and above land in the server log. Log store schema changes go in `server/migrations/logs/` (`LOG_MIGRATIONS`).
 - Commit messages: short imperative sentence (e.g. “Add event action toast notifications”).
 
 ## Deviations from the AGT web app spec
@@ -116,4 +127,3 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 | NAME-2, CFG-2 | Env vars `AGT_SETUP_PASSWORD`, `AGT_CONFIG_FILE`, `AGT_STATIC_DIR` (no `EVENT_CALENDAR` segment); session cookie `agt_session`; Compose service `calendar` and volume `calendar-data`; SQLite file `agt-calendar.sqlite` | Legacy names from before the spec. Renaming them would break existing `.env` files, sign everyone out and orphan the data volume. |
 | CFG-5 | Backup/import upload limits are under `migration.*` instead of `backup.*` | Operators may already set them in `config.yaml`; unknown keys stop the server. |
 | STACK-1 | Extra runtime dependency `papaparse` | Parses the legacy CSVs for Migrate from Amplify. |
-| §13 (LOG-1..23) | No server log or audit log in the admin dashboard yet; logs go to stdout only | **Not intended: to fix.** Logging was added in spec 2.0.0. |

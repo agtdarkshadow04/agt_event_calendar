@@ -1,7 +1,7 @@
 {
   "name": "agt-event-calendar",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -32,6 +32,7 @@
     "better-sqlite3": "^13.0.3",
     "fastify": "^5.12.8",
     "papaparse": "^5.5.3",
+    "pino": "^10.4.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.0.1",

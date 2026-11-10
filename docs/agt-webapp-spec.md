@@ -1355,7 +1355,7 @@ Use this list to review a new app or a large change. Every item must be true or 
 ## Appendix A: Reference implementation deviations
 
 The AGT Event Calendar predates this spec and was brought into compliance afterwards. The deviations below are
-also listed in its `AGENTS.md`. Unless a row says "to fix", they are kept on purpose. **Do not copy them into
+also listed in its `AGENTS.md`. They are kept on purpose. **Do not copy them into
 other apps.**
 
 | Rule | Calendar today | Why |
@@ -1363,7 +1363,6 @@ other apps.**
 | NAME-2, CFG-2 | Env vars `AGT_SETUP_PASSWORD`, `AGT_CONFIG_FILE`, `AGT_STATIC_DIR` (no app segment); cookie `agt_session`; Compose service `calendar`, volume `calendar-data`; SQLite file `agt-calendar.sqlite` | Renaming would break existing `.env` files, sign everyone out and orphan the data volume. New apps use the spec names. |
 | CFG-5 | Backup/import limits live under `migration.*` | Operators may have them in `config.yaml`, and unknown keys stop the server. |
 | STACK-1 | Extra runtime dependency `papaparse` | Parses the legacy CSVs for Migrate from Amplify. |
-| §13 (LOG-1..23) | No log store, server log or audit log yet; logs go to stdout only | **Not kept: to fix.** Added in spec 2.0.0, after the calendar's last compliance pass. |
 
 Calendar-specific features that are **not** part of the standard: Migrate from Amplify (`server/migration.ts`,
 `src/lib/csv.ts`), legacy 4-hex event IDs, bookmarks, the national holidays and change log content types, the

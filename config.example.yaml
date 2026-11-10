@@ -28,6 +28,7 @@
   # databaseFile: agt-calendar.sqlite   # relative to dataDir
   # uploadsDir: uploads                 # relative to dataDir
   # backupsDir: backups                 # relative to dataDir (pre-restore backups)
+  # logDatabaseFile: logs.sqlite        # relative to dataDir; server log and audit log, never in backups
 
 # session:
   # Admin session lifetime in hours.
@@ -81,3 +82,12 @@
   # maxZipBytes: 209715200
   # maxUncompressedBytes: 1073741824
   # maxEntries: 10000
+
+# logs:
+  # Retention of the server log and the audit log. Entries older than the
+  # number of days are deleted hourly; above the cap, the oldest go first
+  # (for the audit log, failed and denied attempts before successful actions).
+  # serverRetentionDays: 30      # 1–3650
+  # serverMaxEntries: 100000     # 1000–10000000
+  # auditRetentionDays: 365      # 30–3650; at least 30 so recent history cannot be erased
+  # auditMaxEntries: 1000000     # 10000–10000000

@@ -9,6 +9,13 @@ export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 const HttpUrl = Type.String({ pattern: '^https?://', maxLength: 2000 });
 const PositiveInt = (maximum: number) => Type.Integer({ minimum: 1, maximum });
+/** Log retention limits (AGT web app spec LOG-16). The audit minimum of 30 days is deliberate. */
+const LOG_LIMITS = {
+  serverRetentionDays: Type.Integer({ minimum: 1, maximum: 3650 }),
+  serverMaxEntries: Type.Integer({ minimum: 1000, maximum: 10_000_000 }),
+  auditRetentionDays: Type.Integer({ minimum: 30, maximum: 3650 }),
+  auditMaxEntries: Type.Integer({ minimum: 10_000, maximum: 10_000_000 }),
+};
 const RateLimit = Type.Object({
   max: Type.Optional(PositiveInt(10_000)),
   windowMinutes: Type.Optional(PositiveInt(1440)),
@@ -31,6 +38,7 @@ export const ConfigFileSchema = Type.Object({
     databaseFile: Type.Optional(Type.String({ minLength: 1 })),
     uploadsDir: Type.Optional(Type.String({ minLength: 1 })),
     backupsDir: Type.Optional(Type.String({ minLength: 1 })),
+    logDatabaseFile: Type.Optional(Type.String({ minLength: 1 })),
   }, { additionalProperties: false })),
   session: Type.Optional(Type.Object({
     ttlHours: Type.Optional(PositiveInt(24 * 90)),
@@ -63,6 +71,12 @@ export const ConfigFileSchema = Type.Object({
     maxUncompressedBytes: Type.Optional(Type.Integer({ minimum: 1024, maximum: 8 * 1024 ** 3 })),
     maxEntries: Type.Optional(Type.Integer({ minimum: 1, maximum: 100_000 })),
   }, { additionalProperties: false })),
+  logs: Type.Optional(Type.Object({
+    serverRetentionDays: Type.Optional(LOG_LIMITS.serverRetentionDays),
+    serverMaxEntries: Type.Optional(LOG_LIMITS.serverMaxEntries),
+    auditRetentionDays: Type.Optional(LOG_LIMITS.auditRetentionDays),
+    auditMaxEntries: Type.Optional(LOG_LIMITS.auditMaxEntries),
+  }, { additionalProperties: false })),
 }, { additionalProperties: false });
 
 export type ConfigFile = Static<typeof ConfigFileSchema>;
@@ -85,6 +99,10 @@ export const EDITABLE_SETTINGS = {
   'migration.maxZipBytes': { schema: Type.Integer({ minimum: 1024, maximum: 2 * 1024 ** 3 }), default: 200 * 1024 ** 2, description: 'Maximum size of a migration or backup ZIP upload in bytes.' },
   'migration.maxUncompressedBytes': { schema: Type.Integer({ minimum: 1024, maximum: 8 * 1024 ** 3 }), default: 1024 ** 3, description: 'Maximum total uncompressed size of a ZIP in bytes.' },
   'migration.maxEntries': { schema: Type.Integer({ minimum: 1, maximum: 100_000 }), default: 10_000, description: 'Maximum number of entries in a ZIP.' },
+  'logs.serverRetentionDays': { schema: LOG_LIMITS.serverRetentionDays, default: 30, description: 'Days server log entries are kept (1–3650).' },
+  'logs.serverMaxEntries': { schema: LOG_LIMITS.serverMaxEntries, default: 100_000, description: 'Maximum number of server log entries; the oldest are deleted first.' },
+  'logs.auditRetentionDays': { schema: LOG_LIMITS.auditRetentionDays, default: 365, description: 'Days audit log entries are kept (at least 30).' },
+  'logs.auditMaxEntries': { schema: LOG_LIMITS.auditMaxEntries, default: 1_000_000, description: 'Maximum number of audit log entries; failed and denied attempts are deleted first.' },
 } satisfies Record<string, SettingDefinition>;
 
 export type SettingKey = keyof typeof EDITABLE_SETTINGS;
@@ -104,6 +122,8 @@ export interface ResolvedConfig {
   databaseFile: string;
   uploadsDir: string;
   backupsDir: string;
+  /** The log store (server log and audit log), never part of a backup. */
+  logDatabaseFile: string;
   sessionTtlHours: number;
   secureCookie: boolean | 'auto';
   rateLimits: Record<'login' | 'setup' | 'adminUploads', { max: number; windowMinutes: number }>;
@@ -161,6 +181,7 @@ export function resolveConfig(file: ConfigFile, rawText: string | null, filePath
     databaseFile: inData(file.storage?.databaseFile, 'agt-calendar.sqlite'),
     uploadsDir: inData(file.storage?.uploadsDir, 'uploads'),
     backupsDir: inData(file.storage?.backupsDir, 'backups'),
+    logDatabaseFile: inData(file.storage?.logDatabaseFile, 'logs.sqlite'),
     sessionTtlHours: file.session?.ttlHours ?? 12,
     secureCookie: file.session?.secureCookie ?? 'auto',
     rateLimits: {

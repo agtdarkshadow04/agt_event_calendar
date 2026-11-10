@@ -2,12 +2,15 @@ import { Value } from '@sinclair/typebox/value';
 import { EDITABLE_SETTINGS, SETTING_KEYS, getFileValue } from './config';
 import type { ResolvedConfig, SettingKey } from './config';
 import type { Db } from './db';
+import type { LogStore } from './logs';
 import { getSettingRows } from './repository';
 
 /** Mutable application state shared by all routes. `db` is swapped on restore. */
 export interface AppContext {
   config: ResolvedConfig;
   db: Db;
+  /** Server log and audit log, in their own file. Never swapped by a restore. */
+  logs: LogStore;
   /** `AGT_SETUP_PASSWORD` from the environment; used only while no admin exists. */
   setupPassword: string | null;
   version: string;

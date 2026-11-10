@@ -1,4 +1,4 @@
-import { createReadStream } from 'node:fs';
+import { createReadStream, statSync } from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
@@ -6,6 +6,7 @@ import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { EVENT_STATUSES, isUuidV4, validateChangeLogInput, validateEventInput, validateHolidayInput } from '../src/lib/validation';
 import type { EventStatus } from '../src/lib/validation';
+import { changedFields, setAudit } from './audit';
 import { CSRF_HEADER, endSession, hasValidSession, requireCsrfHeader, startSession } from './session';
 import { createBackup, discardBackup, previewRestore, restoreBackup } from './backup';
 import { EDITABLE_SETTINGS, SETTING_KEYS } from './config';
@@ -14,6 +15,7 @@ import type { AppContext } from './context';
 import { isDefinedInConfig, setting, settingStates } from './context';
 import { HttpError, readMultipart } from './http';
 import { removeImageFile, validateImage, writeImageFile } from './images';
+import { registerLogRoutes } from './logRoutes';
 import { migrateFromAmplify } from './migration';
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, hashPassword, verifyPassword } from './passwords';
 import { SECURITY, errorResponses } from './openapi';
@@ -114,6 +116,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
     }
     updateAdminPassword(context.db, await hashPassword(request.body.newPassword));
     deleteAllSessions(context.db);
+    setAudit(request, { targetType: 'admin' });
     startSession(context, request, reply);
     return { ok: true as const };
   });
@@ -147,7 +150,9 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
     if (!result.ok) throw new HttpError(400, 'validation_failed', 'The event is invalid.', result.errors);
     const status = statusFrom(request.body.status, 'unpublished');
     const id = insertEvent(context.db, result.value, { status, coverImageId: coverImageIdFrom(context, request.body) });
-    return reply.status(201).send({ event: getEvent(context.db, id)!, notices: result.notices });
+    const event = getEvent(context.db, id)!;
+    setAudit(request, { targetType: 'event', targetId: id, details: { name: event.name, status, fields: Object.keys(request.body).sort() } });
+    return reply.status(201).send({ event, notices: result.notices });
   });
 
   app.put('/api/admin/events/:id', {
@@ -167,7 +172,9 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       updateEvent(context.db, id, result.value, coverImageId);
       if (request.body.status !== undefined) setEventStatus(context.db, id, statusFrom(request.body.status, existing.status));
     })();
-    return { event: getEvent(context.db, id)!, notices: result.notices };
+    const event = getEvent(context.db, id)!;
+    setAudit(request, { targetType: 'event', targetId: id, details: { name: event.name, changedFields: changedFields(existing, event) } });
+    return { event, notices: result.notices };
   });
 
   app.post('/api/admin/events/:id/status', {
@@ -179,7 +186,9 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
     },
   }, async (request) => {
     const id = checkUuid(request.params.id, 'Event');
+    const existing = getEvent(context.db, id) ?? notFound('Event');
     if (!setEventStatus(context.db, id, request.body.status)) notFound('Event');
+    setAudit(request, { targetType: 'event', targetId: id, details: { name: existing.name, from: existing.status, to: request.body.status } });
     return { event: getEvent(context.db, id)!, notices: [] };
   });
 
@@ -190,7 +199,10 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       response: { 204: NoContent, ...errorResponses },
     },
   }, async (request, reply) => {
-    if (!deleteEvent(context.db, checkUuid(request.params.id, 'Event'))) notFound('Event');
+    const id = checkUuid(request.params.id, 'Event');
+    const existing = getEvent(context.db, id) ?? notFound('Event');
+    if (!deleteEvent(context.db, id)) notFound('Event');
+    setAudit(request, { targetType: 'event', targetId: id, details: { name: existing.name, status: existing.status } });
     return reply.status(204).send(null);
   });
 
@@ -233,6 +245,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       removeImageFile(context.config.uploadsDir, image.fileName);
       throw error;
     }
+    setAudit(request, { targetType: 'image', targetId: image.id, details: { sizeBytes: image.sizeBytes, mimeType: image.mimeType } });
     return reply.status(201).send({ image });
   });
 
@@ -254,6 +267,15 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       throw error;
     }
     removeImageFile(context.config.uploadsDir, existing.fileName);
+    setAudit(request, {
+      targetType: 'image',
+      targetId: id,
+      details: {
+        sizeBytes: replacement.sizeBytes,
+        mimeType: replacement.mimeType,
+        previous: { sizeBytes: existing.sizeBytes, mimeType: existing.mimeType },
+      },
+    });
     return { image: getImage(context.db, id)! };
   });
 
@@ -266,6 +288,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   }, async (request, reply) => {
     const image = deleteImageRow(context.db, checkUuid(request.params.id, 'Image')) ?? notFound('Image');
     removeImageFile(context.config.uploadsDir, image.fileName);
+    setAudit(request, { targetType: 'image', targetId: image.id, details: { sizeBytes: image.sizeBytes, mimeType: image.mimeType } });
     return reply.status(204).send(null);
   });
 
@@ -274,13 +297,17 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       ...write('cleanUpAdminImages', ['images'], 'Deletes every image that no event uses.'),
       response: { 200: Type.Object({ removed: Type.Integer() }), ...errorResponses },
     },
-  }, async () => {
+  }, async (request) => {
     const removed = context.db.transaction(() => {
       const images = unreferencedImages(context.db);
       for (const image of images) deleteImageRow(context.db, image.id);
       return images;
     })();
     for (const image of removed) removeImageFile(context.config.uploadsDir, image.fileName);
+    setAudit(request, {
+      targetType: 'image',
+      details: { removed: removed.length, bytes: removed.reduce((total, image) => total + image.sizeBytes, 0) },
+    });
     return { removed: removed.length };
   });
 
@@ -303,7 +330,9 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
     const result = validateHolidayInput(request.body);
     if (!result.ok) throw new HttpError(400, 'validation_failed', 'The holiday is invalid.', result.errors);
     const id = insertHoliday(context.db, result.value, request.body.published ?? true);
-    return reply.status(201).send({ holiday: getHoliday(context.db, id)!, notices: result.notices });
+    const holiday = getHoliday(context.db, id)!;
+    setAudit(request, { targetType: 'holiday', targetId: id, details: { name: holiday.name, published: holiday.published, fields: Object.keys(request.body).sort() } });
+    return reply.status(201).send({ holiday, notices: result.notices });
   });
 
   app.put('/api/admin/holidays/:id', {
@@ -315,10 +344,13 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
     },
   }, async (request) => {
     const id = checkUuid(request.params.id, 'Holiday');
+    const existing = getHoliday(context.db, id) ?? notFound('Holiday');
     const result = validateHolidayInput(request.body);
     if (!result.ok) throw new HttpError(400, 'validation_failed', 'The holiday is invalid.', result.errors);
     if (!updateHoliday(context.db, id, result.value, request.body.published ?? true)) notFound('Holiday');
-    return { holiday: getHoliday(context.db, id)!, notices: result.notices };
+    const holiday = getHoliday(context.db, id)!;
+    setAudit(request, { targetType: 'holiday', targetId: id, details: { name: holiday.name, changedFields: changedFields(existing, holiday) } });
+    return { holiday, notices: result.notices };
   });
 
   app.delete('/api/admin/holidays/:id', {
@@ -328,7 +360,10 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       response: { 204: NoContent, ...errorResponses },
     },
   }, async (request, reply) => {
-    if (!deleteHoliday(context.db, checkUuid(request.params.id, 'Holiday'))) notFound('Holiday');
+    const id = checkUuid(request.params.id, 'Holiday');
+    const existing = getHoliday(context.db, id) ?? notFound('Holiday');
+    if (!deleteHoliday(context.db, id)) notFound('Holiday');
+    setAudit(request, { targetType: 'holiday', targetId: id, details: { name: existing.name } });
     return reply.status(204).send(null);
   });
 
@@ -351,7 +386,9 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
     const result = validateChangeLogInput(request.body);
     if (!result.ok) throw new HttpError(400, 'validation_failed', 'The change-log entry is invalid.', result.errors);
     const id = insertChangeLog(context.db, result.value, request.body.published ?? true);
-    return reply.status(201).send({ changeLogEntry: getChangeLog(context.db, id)!, notices: result.notices });
+    const entry = getChangeLog(context.db, id)!;
+    setAudit(request, { targetType: 'changelog', targetId: id, details: { date: entry.date, published: entry.published, fields: Object.keys(request.body).sort() } });
+    return reply.status(201).send({ changeLogEntry: entry, notices: result.notices });
   });
 
   app.put('/api/admin/changelog/:id', {
@@ -363,10 +400,13 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
     },
   }, async (request) => {
     const id = checkUuid(request.params.id, 'Change-log entry');
+    const existing = getChangeLog(context.db, id) ?? notFound('Change-log entry');
     const result = validateChangeLogInput(request.body);
     if (!result.ok) throw new HttpError(400, 'validation_failed', 'The change-log entry is invalid.', result.errors);
     if (!updateChangeLog(context.db, id, result.value, request.body.published ?? true)) notFound('Change-log entry');
-    return { changeLogEntry: getChangeLog(context.db, id)!, notices: result.notices };
+    const entry = getChangeLog(context.db, id)!;
+    setAudit(request, { targetType: 'changelog', targetId: id, details: { date: entry.date, changedFields: changedFields(existing, entry) } });
+    return { changeLogEntry: entry, notices: result.notices };
   });
 
   app.delete('/api/admin/changelog/:id', {
@@ -376,7 +416,10 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       response: { 204: NoContent, ...errorResponses },
     },
   }, async (request, reply) => {
-    if (!deleteChangeLog(context.db, checkUuid(request.params.id, 'Change-log entry'))) notFound('Change-log entry');
+    const id = checkUuid(request.params.id, 'Change-log entry');
+    const existing = getChangeLog(context.db, id) ?? notFound('Change-log entry');
+    if (!deleteChangeLog(context.db, id)) notFound('Change-log entry');
+    setAudit(request, { targetType: 'changelog', targetId: id, details: { date: existing.date } });
     return reply.status(204).send(null);
   });
 
@@ -414,13 +457,23 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
         throw new HttpError(400, 'invalid_setting', `${key} has an invalid value.`);
       }
     }
+    const before = new Map(settingStates(context).map((state) => [state.key as string, state.value]));
     context.db.transaction(() => {
       for (const [key, value] of entries) {
         if (value === null) deleteSetting(context.db, key);
         else setSetting(context.db, key, value);
       }
     })();
-    return settingStates(context);
+    const after = settingStates(context);
+    setAudit(request, {
+      targetType: 'settings',
+      details: {
+        changes: entries.map(([key]) => ({
+          key, old: before.get(key) ?? null, new: after.find((state) => state.key === key)?.value ?? null,
+        })),
+      },
+    });
+    return after;
   });
 
   // ------------------------------------------------------------- Migrate from Amplify
@@ -447,7 +500,24 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
         throw new HttpError(400, 'invalid_request', 'onExisting must be skip or overwrite.');
       }
       const report = await migrateFromAmplify(context, file.path, { dryRun: mode === 'preview', onExisting });
-      request.log.info({ dryRun: report.dryRun, events: report.events.toCreate }, 'Migrate from Amplify');
+      setAudit(request, {
+        targetType: 'migration',
+        details: {
+          mode,
+          onExisting,
+          fileSizeBytes: statSync(file.path).size,
+          events: {
+            toCreate: report.events.toCreate, toOverwrite: report.events.toOverwrite,
+            alreadyMigrated: report.events.alreadyMigrated, skipped: report.events.skipped,
+          },
+          holidays: report.holidays,
+          descriptionsStored: report.descriptionsStored,
+          coversStored: report.coversStored,
+          errors: report.errors.length,
+          warnings: report.warnings.length,
+          missingFiles: report.missingFiles.length,
+        },
+      });
       return report;
     } finally {
       form.cleanup();
@@ -457,6 +527,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   // ------------------------------------------------------------- backup & restore
 
   app.get('/api/admin/backup', {
+    config: { audit: true },
     schema: {
       ...read('downloadBackup', ['backup'], 'Downloads a backup ZIP (database, uploads, config.yaml, manifest).'),
       response: { 200: binaryResponse('The backup ZIP.', ['application/zip']), ...errorResponses },
@@ -465,7 +536,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
     const backup = await createBackup(context);
     const stream = createReadStream(backup.path);
     stream.on('close', () => discardBackup(backup.path));
-    request.log.info('Backup exported');
+    setAudit(request, { targetType: 'backup', details: { fileName: backup.fileName, sizeBytes: statSync(backup.path).size } });
     reply.header('Content-Type', 'application/zip');
     reply.header('Content-Disposition', `attachment; filename="${path.basename(backup.fileName)}"`);
     // A stream is sent as is; the response schema only documents it.
@@ -489,14 +560,29 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       const file = form.files.get('backup');
       if (!file?.path) throw new HttpError(400, 'file_required', 'Choose the backup ZIP file to upload.');
       const action = form.fields.action ?? 'preview';
-      if (action === 'preview') return await previewRestore(context, file.path);
-      if (action !== 'restore') throw new HttpError(400, 'invalid_request', 'action must be preview or restore.');
-      const report = await restoreBackup(context, file.path);
-      request.log.warn({ preRestoreBackup: report.preRestoreBackup }, 'Backup restored; all sessions ended');
-      endSession(context, request, reply);
+      if (action !== 'preview' && action !== 'restore') throw new HttpError(400, 'invalid_request', 'action must be preview or restore.');
+      setAudit(request, { targetType: 'backup', details: { action, fileSizeBytes: statSync(file.path).size } });
+      const report = action === 'preview' ? await previewRestore(context, file.path) : await restoreBackup(context, file.path);
+      setAudit(request, {
+        details: {
+          backupCreatedAt: report.createdAt,
+          backupAppVersion: report.appVersion,
+          upgradedFromSchemaVersion: report.upgradedFromSchemaVersion,
+          counts: report.counts,
+          ignoredSettings: report.ignoredSettings.map((item) => item.key),
+          droppedFiles: report.droppedFiles.length,
+          configIncluded: report.config.included,
+          preRestoreBackup: report.preRestoreBackup,
+        },
+      });
+      if (action === 'restore') endSession(context, request, reply);
       return report;
     } finally {
       form.cleanup();
     }
   });
+
+  // ------------------------------------------------------------- logs
+
+  registerLogRoutes(app, context);
 }
