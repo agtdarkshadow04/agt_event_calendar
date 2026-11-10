@@ -7,7 +7,8 @@ import type { AppContext } from './context';
 import { openDatabase } from './db';
 import type { Migration } from './db';
 import { LogStore, createLogger } from './logs';
-import { logStartup } from './startup';
+import { getAdmin } from './repository';
+import { logStartup, readSetupPassword } from './startup';
 
 function appVersion(root: string): string {
   try {
@@ -36,11 +37,16 @@ async function main() {
   const logs = LogStore.open(config.logDatabaseFile, (migration) => logMigrations.push(migration));
   const migrations: Migration[] = [];
   const db = openDatabase(config.databaseFile, { onMigration: (migration) => migrations.push(migration) });
+  const setupPassword = readSetupPassword(process.env.AGT_SETUP_PASSWORD, getAdmin(db) !== null);
+  if (setupPassword.error) {
+    console.error(`Refusing to start: ${setupPassword.error}`);
+    process.exit(1);
+  }
   const context: AppContext = {
     config,
     db,
     logs,
-    setupPassword: process.env.AGT_SETUP_PASSWORD?.trim() || null,
+    setupPassword: setupPassword.value,
     version: appVersion(root),
   };
   // stdout follows server.logLevel; the server log gets info and above (LOG-5).

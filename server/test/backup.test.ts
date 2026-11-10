@@ -6,6 +6,7 @@ import path from 'node:path';
 import { after, describe, it } from 'node:test';
 import Database from 'better-sqlite3';
 import { SCHEMA_VERSION } from '../db';
+import { getSecret } from '../repository';
 import { openSafeZip } from '../zip';
 import { CSRF, JPEG, createTestServer, makeZip, multipart, setupAdmin, validEvent } from './helpers';
 import type { TestServer } from './helpers';
@@ -96,6 +97,16 @@ describe('backup export', () => {
 });
 
 describe('backup restore', () => {
+  it('generates the ALTCHA key at the end of a restore whose data has none (ALT-2)', async () => {
+    const test = await adminServer();
+    test.context.db.prepare(`DELETE FROM app_secrets WHERE name = 'altcha_hmac_key'`).run();
+    const backup = await exportBackup(test);
+    const response = await test.restore(backup, 'restore');
+    assert.equal(response.statusCode, 200, response.body);
+    assert.match(getSecret(test.context.db, 'altcha_hmac_key') ?? '', /^[0-9a-f]{64}$/);
+    assert.equal((await test.app.inject({ method: 'GET', url: '/api/altcha/challenge' })).statusCode, 200);
+  });
+
   it('restores the database, uploads and settings after a pre-restore backup, and ends the session', async () => {
     const test = await adminServer();
     await seed(test);

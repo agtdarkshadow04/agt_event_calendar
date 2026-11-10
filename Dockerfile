@@ -13,8 +13,11 @@ RUN npm run build && npm prune --omit=dev
 
 # ---- runtime: slim Node 26 image, non-root user
 FROM node:26-bookworm-slim AS runtime
+# Inside the container the app listens on every interface; docker-compose.yml publishes the port on the host's
+# loopback interface only (SEC-4).
 ENV NODE_ENV=production \
-    AGT_CONFIG_FILE=/app/config.yaml
+    AGT_CONFIG_FILE=/app/config.yaml \
+    AGT_SERVER_HOST=0.0.0.0
 WORKDIR /app
 COPY --from=build --chown=node:node /app/package.json ./
 COPY --from=build --chown=node:node /app/node_modules ./node_modules

@@ -328,11 +328,16 @@ export function deleteAllSessions(db: Db): void {
 
 // ---------------------------------------------------------------- secrets & ALTCHA replay protection
 
-export function getOrCreateSecret(db: Db, name: string, create: () => string): string {
+/** Stores a generated secret unless one with this name exists. Called at startup and after a restore only (SEC-8). */
+export function createSecretIfMissing(db: Db, name: string, create: () => string): boolean {
+  if (getSecret(db, name) !== null) return false;
   const timestamp = now();
-  db.prepare('INSERT OR IGNORE INTO app_secrets (name, value, created_at, updated_at) VALUES (?, ?, ?, ?)')
-    .run(name, create(), timestamp, timestamp);
-  return (db.prepare('SELECT value FROM app_secrets WHERE name = ?').get(name) as { value: string }).value;
+  return db.prepare('INSERT OR IGNORE INTO app_secrets (name, value, created_at, updated_at) VALUES (?, ?, ?, ?)')
+    .run(name, create(), timestamp, timestamp).changes > 0;
+}
+
+export function getSecret(db: Db, name: string): string | null {
+  return (db.prepare('SELECT value FROM app_secrets WHERE name = ?').get(name) as { value: string } | undefined)?.value ?? null;
 }
 
 /** Atomically marks an ALTCHA challenge as used. Returns false if it already was. */

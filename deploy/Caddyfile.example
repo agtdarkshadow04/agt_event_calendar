@@ -1,11 +1,14 @@
 # Example Caddy configuration: HTTPS in front of the AGT Event Calendar.
 # Caddy obtains and renews the TLS certificate automatically.
 #
-# Replace calendar.example.org with your domain, then in config.yaml set:
+# Replace calendar.example.org with your domain, then in config.yaml set
+# server.trustProxy to the address the app sees Caddy connect from:
 #   server:
-#     host: 127.0.0.1        # local install: only Caddy can reach the app
-#     trustProxy: 127.0.0.1  # or the proxy's address/CIDR when it runs elsewhere
-# Keep session.secureCookie: auto so the admin cookie is marked Secure.
+#     trustProxy: 127.0.0.1     # local installation
+#     # trustProxy: 172.16.0.0/12  # Docker: the Docker network's gateway or Caddy's container address/CIDR
+# The defaults already keep the app reachable from this host only (server.host
+# 127.0.0.1, or the port published on 127.0.0.1 with Docker), which suits Caddy
+# on the same host. Keep session.secureCookie: auto so the admin cookie is Secure.
 
 calendar.example.org {
 	reverse_proxy 127.0.0.1:8080

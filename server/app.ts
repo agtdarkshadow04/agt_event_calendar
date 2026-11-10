@@ -14,10 +14,10 @@ import type { ApiEvent, PublicSettings } from '../src/lib/api';
 import { isLegacyEventId, isUuidV4, validateAgtUsername, validateEventInput } from '../src/lib/validation';
 import { registerAdminRoutes } from './adminRoutes';
 import { auditFailure, registerAudit, setAudit } from './audit';
-import { createAltchaChallenge, verifyAltchaPayload } from './altcha';
+import { createAltchaChallenge, ensureAltchaKey, verifyAltchaPayload } from './altcha';
 import type { AppContext } from './context';
 import { setting } from './context';
-import { HttpError, readMultipart } from './http';
+import { HttpError, isLoopbackAddress, readMultipart } from './http';
 import { createLogger, scheduleRetention } from './logs';
 import { SECURITY, errorResponses, registerOpenApi } from './openapi';
 import {
@@ -26,7 +26,7 @@ import {
 } from './schemas';
 import { endSession, hasValidSession, requireCsrfHeader, startSession } from './session';
 import { ImageRejectedError, removeImageFile, validateImage, writeImageFile } from './images';
-import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, hashPassword, secretsEqual, verifyPassword } from './passwords';
+import { MAX_PASSWORD_LENGTH, MAX_USERNAME_LENGTH, MIN_PASSWORD_LENGTH, checkAdminPassword, hashPassword, secretsEqual } from './passwords';
 import {
   createAdmin, getAdmin, getEvent, getEventByLegacyId, getImage, insertEvent,
   insertImage, listChangeLog, listEvents, listHolidays,
@@ -106,6 +106,8 @@ const rateLimit = (max: number | ((request: FastifyRequest) => number), windowMi
 });
 
 export async function buildApp(context: AppContext, options: BuildOptions = {}): Promise<FastifyInstance> {
+  // Generated secrets are created at startup, never by a request (ALT-2, SEC-8).
+  ensureAltchaKey(context.db);
   const app = Fastify({
     loggerInstance: options.logger ?? createLogger(context.logs, 'silent', null),
     // Access logs describe user activity, which the audit log covers (LOG-6).
@@ -365,6 +367,15 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
 
   // ------------------------------------------------------------- first-run setup & auth
 
+  // SEC-4: the app never encrypts, so warn once per process when credentials arrive over plain HTTP from another host.
+  let plainHttpWarned = false;
+  const warnPlainHttpCredentials = (request: FastifyRequest) => {
+    if (plainHttpWarned || request.protocol !== 'http' || isLoopbackAddress(request.ip)) return;
+    plainHttpWarned = true;
+    app.log.warn({ source: 'security' },
+      'Credentials were sent over plain HTTP from another host, unencrypted. Put a TLS-terminating reverse proxy in front of the app (README: TLS and reverse proxies).');
+  };
+
   app.get('/api/setup/status', {
     schema: {
       operationId: 'getSetupStatus', tags: ['auth'],
@@ -386,11 +397,12 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
       response: { 201: UsernameSchema, ...errorResponses },
       body: Type.Object({
         setupPassword: Type.String({ maxLength: MAX_PASSWORD_LENGTH }),
-        username: Type.String({ maxLength: 64 }),
+        username: Type.String({ maxLength: MAX_USERNAME_LENGTH }),
         password: Type.String({ maxLength: MAX_PASSWORD_LENGTH }),
       }, { additionalProperties: false }),
     },
   }, async (request, reply) => {
+    warnPlainHttpCredentials(request);
     requireCsrfHeader(request);
     if (getAdmin(context.db)) {
       throw new HttpError(410, 'setup_complete', 'The admin account already exists. First-run setup is disabled.');
@@ -431,7 +443,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
       operationId: 'login', tags: ['auth'], summary: 'Signs the admin in and sets the session cookie.',
       security: SECURITY.csrf,
       body: Type.Object({
-        username: Type.String({ maxLength: 64 }),
+        username: Type.String({ maxLength: MAX_USERNAME_LENGTH }),
         password: Type.String({ maxLength: MAX_PASSWORD_LENGTH }),
       }, { additionalProperties: false }),
       response: { 200: UsernameSchema, ...errorResponses },
@@ -439,7 +451,8 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
   }, async (request, reply) => {
     requireCsrfHeader(request);
     const admin = getAdmin(context.db);
-    const passwordOk = await verifyPassword(request.body.password, admin?.password_hash ?? dummyHash);
+    warnPlainHttpCredentials(request);
+    const passwordOk = await checkAdminPassword(request.log, request.body.password, admin?.password_hash ?? dummyHash);
     const usernameOk = admin !== null && secretsEqual(request.body.username.trim(), admin.username);
     if (!admin || !passwordOk || !usernameOk) {
       throw new HttpError(401, 'invalid_credentials', 'The username or password is incorrect.');

@@ -5,6 +5,7 @@ import { deriveKey } from 'altcha-lib/algorithms/sha';
 import { after, describe, it } from 'node:test';
 import { parseConfigText } from '../config';
 import { detectImageType, validateImage } from '../images';
+import { getSecret } from '../repository';
 import { CSRF, JPEG, PNG, createTestServer, multipart, setupAdmin, solveAltcha, validEvent } from './helpers';
 import type { MultipartFile, TestServer } from './helpers';
 
@@ -89,9 +90,8 @@ describe('public submissions', () => {
   });
 
   it('rejects expired ALTCHA challenges', async () => {
-    const hmacKey = 'a-test-hmac-key-that-is-at-least-32-characters-long';
-    // createTestServer() already opens an `altcha:` block; this line extends it.
-    const test = await server(`  hmacKey: ${hmacKey}\n`);
+    const test = await server();
+    const hmacKey = getSecret(test.context.db, 'altcha_hmac_key')!;
     const challenge = await createChallenge({
       algorithm: 'SHA-256', cost: 1000, deriveKey, hmacSignatureSecret: hmacKey,
       expiresAt: Math.floor(Date.now() / 1000) - 60,

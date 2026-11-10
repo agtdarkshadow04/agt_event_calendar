@@ -3,10 +3,11 @@ services:
     build: .
     image: agt-event-calendar:latest
     restart: unless-stopped
-    # Plain HTTP only. Put your own TLS-terminating reverse proxy in front
-    # and set `server.trustProxy` in config.yaml.
+    # Plain HTTP only, so the port is published on this host's loopback interface only (SEC-4).
+    # Put a TLS-terminating reverse proxy in front (README: TLS and reverse proxies) and set
+    # server.trustProxy. Publish on another interface only if that proxy runs on another machine.
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     # Secrets and bootstrap values (AGT_SETUP_PASSWORD). See .env.example.
     env_file:
       - path: .env

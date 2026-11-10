@@ -50,7 +50,9 @@ export const ConfigFileSchema = Type.Object({
     adminUploads: Type.Optional(RateLimit),
   }, { additionalProperties: false })),
   altcha: Type.Optional(Type.Object({
-    hmacKey: Type.Optional(Type.String({ minLength: 32 })),
+    /** Deprecated and ignored: the key is generated (ALT-2). Accepted until the next minor release so that existing
+     * config files still load; startup warns while it is set. */
+    hmacKey: Type.Optional(Type.String()),
     cost: Type.Optional(Type.Integer({ minimum: 1000, maximum: 10_000_000 })),
     challengeTtlSeconds: Type.Optional(Type.Integer({ minimum: 30, maximum: 3600 })),
   }, { additionalProperties: false })),
@@ -127,7 +129,7 @@ export interface ResolvedConfig {
   sessionTtlHours: number;
   secureCookie: boolean | 'auto';
   rateLimits: Record<'login' | 'setup' | 'adminUploads', { max: number; windowMinutes: number }>;
-  altcha: { hmacKey: string | null; cost: number; challengeTtlSeconds: number };
+  altcha: { cost: number; challengeTtlSeconds: number };
 }
 
 export class ConfigError extends Error {}
@@ -162,7 +164,16 @@ export function parseConfigText(text: string): ConfigFile {
   return data as ConfigFile;
 }
 
-export function resolveConfig(file: ConfigFile, rawText: string | null, filePath: string, baseDir = process.cwd()): ResolvedConfig {
+/** The listen address when `server.host` is not in config.yaml (SEC-4). The Dockerfile sets `AGT_SERVER_HOST=0.0.0.0`. */
+export const DEFAULT_HOST = '127.0.0.1';
+
+export function resolveConfig(
+  file: ConfigFile,
+  rawText: string | null,
+  filePath: string,
+  baseDir = process.cwd(),
+  env: NodeJS.ProcessEnv = process.env,
+): ResolvedConfig {
   const dataDir = path.resolve(baseDir, file.storage?.dataDir ?? 'data');
   const inData = (value: string | undefined, fallback: string) => path.resolve(dataDir, value ?? fallback);
   const rate = (value: { max?: number; windowMinutes?: number } | undefined, max: number, windowMinutes: number) => ({
@@ -173,7 +184,8 @@ export function resolveConfig(file: ConfigFile, rawText: string | null, filePath
     file,
     rawText,
     filePath,
-    host: file.server?.host ?? '0.0.0.0',
+    // config.yaml > AGT_SERVER_HOST > loopback only (CFG-2).
+    host: file.server?.host ?? (env.AGT_SERVER_HOST?.trim() || DEFAULT_HOST),
     port: file.server?.port ?? 8080,
     trustProxy: file.server?.trustProxy ?? false,
     logLevel: file.server?.logLevel ?? 'info',
@@ -190,7 +202,6 @@ export function resolveConfig(file: ConfigFile, rawText: string | null, filePath
       adminUploads: rate(file.rateLimits?.adminUploads, 120, 15),
     },
     altcha: {
-      hmacKey: file.altcha?.hmacKey ?? null,
       cost: file.altcha?.cost ?? 5_000,
       challengeTtlSeconds: file.altcha?.challengeTtlSeconds ?? 600,
     },
