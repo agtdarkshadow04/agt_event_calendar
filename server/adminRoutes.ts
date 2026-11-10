@@ -85,13 +85,14 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
 
   app.get('/api/admin/session', {
     schema: {
-      ...read('getSession', ['admin'], 'Returns the signed-in admin and whether the setup password is still set.'),
+      ...read('getSession', ['admin'], 'Returns the signed-in admin, whether the setup password is still set, and the app version.'),
       response: { 200: SessionSchema, ...errorResponses },
     },
   }, async () => ({
     username: getAdmin(context.db)?.username ?? null,
     setupPasswordStillSet: Boolean(context.setupPassword),
     csrfHeader: CSRF_HEADER,
+    version: context.version,
   }));
 
   app.post('/api/admin/password', {

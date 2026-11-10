@@ -29,9 +29,12 @@ Choose one method: [Docker Compose](#docker-compose) (recommended) or a [local i
 
 Requirements: Docker with the Compose plugin.
 
+Installations run released versions. Replace `vX.Y.Z` below with the latest release from the [releases page](https://github.com/agtdarkshadow04/agt_event_calendar/releases); never run `main` in production.
+
 ```bash
-git clone https://github.com/Folfchie/agt_event_calendar.git
+git clone https://github.com/agtdarkshadow04/agt_event_calendar.git
 cd agt_event_calendar
+git checkout vX.Y.Z
 cp config.example.yaml config.yaml
 cp .env.example .env
 ```
@@ -74,11 +77,12 @@ The app runs as a hardened systemd service under its own system user. Paths:
    sudo apt-get install -y nodejs git build-essential python3
    ```
 
-2. Create the system user, then download and build the app:
+2. Create the system user, then download the latest release and build it. Replace `vX.Y.Z` with the latest release from the [releases page](https://github.com/agtdarkshadow04/agt_event_calendar/releases):
 
    ```bash
    sudo useradd --system --home-dir /var/lib/agt-event-calendar --shell /usr/sbin/nologin agt-event-calendar
-   sudo git clone https://github.com/Folfchie/agt_event_calendar.git /opt/agt-event-calendar
+   sudo git clone https://github.com/agtdarkshadow04/agt_event_calendar.git /opt/agt-event-calendar
+   sudo git -C /opt/agt-event-calendar checkout vX.Y.Z
    cd /opt/agt-event-calendar
    sudo npm ci
    sudo npm run build
@@ -121,12 +125,17 @@ The app serves **plain HTTP only**; TLS is up to you. Put it behind your own TLS
 
 ### Upgrading
 
-Take a backup first (see [Backup & restore](#backup--restore)). Database migrations run automatically at startup.
+Every release is a `vX.Y.Z` tag; [`CHANGELOG.md`](CHANGELOG.md) lists what changed. A new major version (the first number) may need action from you; minor and patch versions never do.
+
+1. Read the **Upgrade notes** in [`CHANGELOG.md`](CHANGELOG.md) for every version between yours and the new one. The dashboard header shows the version you run.
+2. Download a backup (see [Backup & restore](#backup--restore)) and keep it until the new version works. You need it to roll back.
+3. Check out the new release tag and rebuild. Database migrations run automatically at startup.
 
 Docker Compose:
 
 ```bash
-git pull
+git fetch --tags
+git checkout vX.Y.Z
 docker compose up -d --build
 ```
 
@@ -134,12 +143,42 @@ Local installation:
 
 ```bash
 cd /opt/agt-event-calendar
-sudo git pull
+sudo git fetch --tags
+sudo git checkout vX.Y.Z
 sudo npm ci
 sudo npm run build
 sudo npm prune --omit=dev
 sudo systemctl restart agt-event-calendar
 ```
+
+### Rolling back
+
+Downgrading in place is not supported: when the newer version has migrated the database, the previous version refuses to start (`Database schema version N is newer than this application supports`). To go back, run the previous release on a fresh database and restore the backup you took before the upgrade:
+
+1. Stop the app, check out the previous release tag and move the database aside. The files are kept in `rollback/` in the data directory, so nothing is deleted.
+
+   Docker Compose:
+
+   ```bash
+   docker compose down
+   git checkout vX.Y.Z
+   docker compose run --rm --no-deps --entrypoint sh calendar -c 'mkdir -p /app/data/rollback && mv /app/data/agt-calendar.sqlite* /app/data/rollback/'
+   ```
+
+   Local installation:
+
+   ```bash
+   sudo systemctl stop agt-event-calendar
+   cd /opt/agt-event-calendar
+   sudo git checkout vX.Y.Z
+   sudo -u agt-event-calendar sh -c 'mkdir -p /var/lib/agt-event-calendar/rollback && mv /var/lib/agt-event-calendar/agt-calendar.sqlite* /var/lib/agt-event-calendar/rollback/'
+   ```
+
+   If the error names the log store (`Log store schema version …`), move `logs.sqlite*` aside the same way.
+
+2. Set `AGT_SETUP_PASSWORD` in `.env` again and rebuild and start the previous version: `docker compose up -d --build`, or `sudo npm ci && sudo npm run build && sudo npm prune --omit=dev && sudo systemctl start agt-event-calendar`.
+3. Create a temporary admin account at `/admin` (see [First run](#first-run)), then restore the backup under **Backup & restore → Restore** (see [Restore](#restore)). The restore brings back your events, images, settings and admin account.
+4. Remove `AGT_SETUP_PASSWORD` from `.env` again and restart.
 
 ## First run
 

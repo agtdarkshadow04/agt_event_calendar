@@ -47,6 +47,7 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 
 | Path | Purpose |
 | --- | --- |
+| `CHANGELOG.md` | Release notes (Keep a Changelog 1.1.0), newest first; `server/test/version.test.ts` checks it against `package.json` |
 | `server/index.ts` | Entry point: loads `config.yaml` (`AGT_CONFIG_FILE`), opens the DB, reads `AGT_SETUP_PASSWORD`, listens |
 | `server/app.ts` | `buildApp()`: security headers/CSP, error handling, public API, submissions, setup, login, static SPA |
 | `server/adminRoutes.ts` | Admin-only API (session + `x-agt-request: 1` CSRF header required) |
@@ -120,6 +121,11 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
   `details` holds names, changed field names and counts, never passwords, Markdown bodies, file contents or the values
   of failed fields. Server-caused events use `app.log` with a `source` (`startup`, `config`, `migrations`, …); `info`
   and above land in the server log. Log store schema changes go in `server/migrations/logs/` (`LOG_MIGRATIONS`).
+- **Versioning (§21):** every PR that ships changes (code, assets, migrations, `Dockerfile`, `docker-compose.yml`,
+  `deploy/`, `config.example.yaml`) bumps the version with `npm version X.Y.Z --no-git-tag-version`, relative to the
+  last release tag, and adds its entries under `## [X.Y.Z] - Unreleased` in `CHANGELOG.md` (VER-6, VER-8, VER-9).
+  Docs-only, test-only and `AGENTS.md` changes need no bump. Create tags and GitHub Releases only when the
+  maintainer asks (VER-12).
 - Commit messages: short imperative sentence (e.g. “Add event action toast notifications”).
 
 ## Deviations from the AGT web app spec
@@ -132,4 +138,3 @@ This table is the only list of the calendar's deviations; the spec itself no lon
 | NAME-2, CFG-2 | Env vars `AGT_SETUP_PASSWORD`, `AGT_CONFIG_FILE`, `AGT_STATIC_DIR` (no `EVENT_CALENDAR` segment); session cookie `agt_session`; Compose service `calendar` and volume `calendar-data`; SQLite file `agt-calendar.sqlite` | Legacy names from before the spec. Renaming them would break existing `.env` files, sign everyone out and orphan the data volume. |
 | CFG-5 | Backup/import upload limits are under `migration.*` instead of `backup.*` | Operators may already set them in `config.yaml`; unknown keys stop the server. |
 | STACK-1 | Extra runtime dependency `papaparse` | Parses the legacy CSVs for Migrate from Amplify. |
-| §21 (VER-2, VER-9, VER-11, VER-13) | No `CHANGELOG.md` or release tags yet; the admin dashboard doesn't show the version; the README installs and upgrades from `main` | **Not intended: to fix.** Versioning rules were added in spec 3.0.0. |

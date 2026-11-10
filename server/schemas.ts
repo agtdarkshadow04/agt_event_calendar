@@ -191,6 +191,7 @@ export const SessionSchema = Type.Object({
   username: Nullable(Type.String()),
   setupPasswordStillSet: Type.Boolean({ description: 'True while the setup password is still in the environment.' }),
   csrfHeader: Type.String(),
+  version: Type.String({ description: 'The app version (SemVer), as in `package.json`.' }),
 });
 
 // ------------------------------------------------------------------ submissions & captcha

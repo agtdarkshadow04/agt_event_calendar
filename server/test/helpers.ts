@@ -25,7 +25,7 @@ export interface TestServer {
 }
 
 export async function createTestServer(
-  options: { config?: string; setupPassword?: string | null; staticDir?: string } = {},
+  options: { config?: string; setupPassword?: string | null; staticDir?: string; version?: string } = {},
 ): Promise<TestServer> {
   const dir = mkdtempSync(path.join(tmpdir(), 'agt-test-'));
   const configText = options.config ?? '';
@@ -36,7 +36,7 @@ export async function createTestServer(
     db: openDatabase(config.databaseFile),
     logs: LogStore.open(config.logDatabaseFile),
     setupPassword: options.setupPassword === undefined ? SETUP_PASSWORD : options.setupPassword,
-    version: 'test',
+    version: options.version ?? 'test',
   };
   const app = await buildApp(context, { staticDir: options.staticDir });
   return {
