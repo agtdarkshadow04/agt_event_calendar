@@ -273,6 +273,9 @@ export const RestoreReportSchema = Type.Object({
     diff: Type.Array(Type.String()),
   }),
   preRestoreBackup: Nullable(Type.String()),
+  warnings: Type.Array(Type.String(), {
+    description: 'Restore only: set-aside paths that could not be deleted and must be deleted by hand (BAK-4 step 6.2).',
+  }),
 });
 
 // ------------------------------------------------------------------ logs

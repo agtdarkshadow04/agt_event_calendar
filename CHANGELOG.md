@@ -46,6 +46,12 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
   for a change that waited more than 30 seconds for a backup. `GET /api/health` returns `{ "status": "maintenance" }`
   during a restore. The calendar and the dashboard show a non-blocking "Maintenance in progress" notice and retry the
   request once ([#61](https://github.com/agtdarkshadow04/agt_event_calendar/issues/61)).
+- A failed restore rolls back: the previous database and uploads, set aside as `<name>.restore-old-<timestamp>`, are put
+  back, and the request gets `500` "The restore failed and was rolled back. Nothing was changed." If the rollback
+  fails too, the app stays in maintenance, writes `restore-failed.json` in the data directory and refuses to start
+  until it is removed. Until then, the admin who started the restore can recover from the same session with a new
+  restore. The README's Troubleshooting section explains both, and the manual recovery
+  ([#62](https://github.com/agtdarkshadow04/agt_event_calendar/issues/62)).
 - `package.json` approves the install scripts of `better-sqlite3` and `esbuild` in `allowScripts`, so `npm ci` behaves
   the same with npm 11.20 and newer ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
 
@@ -60,6 +66,10 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
   app's, safe relative paths, no duplicates, and every archive entry listed. The preview, and the restore itself,
   also reject a backup whose admin password hash fails the password-hash check
   ([#61](https://github.com/agtdarkshadow04/agt_event_calendar/issues/61)).
+- A restore now follows the spec's steps: after the swap it migrates and checks the restored data (integrity,
+  references, schema version, tables and referenced images) and then commits, removing locked settings and sessions
+  in one transaction. Set-aside paths that cannot be deleted no longer fail the restore; they are listed as
+  `warnings` in its result and in the server log ([#62](https://github.com/agtdarkshadow04/agt_event_calendar/issues/62)).
 - The captcha key is generated at startup, and after a restore whose data has none, instead of by the first captcha
   request ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
 - While no admin exists, an `AGT_SETUP_PASSWORD` longer than 1024 characters stops the server with a clear message

@@ -395,7 +395,9 @@ Upload a backup under **Backup & restore → Restore** and review the preview. B
 
 While the restore runs, every API request gets `503` "Maintenance in progress" and the pages show a notice that retries automatically; `GET /api/health` answers `{ "status": "maintenance" }`, so Docker does not restart the container. The restore first waits up to 30 seconds for requests already in progress; if one is still running then, it is cancelled with "The server is busy. Try again." and nothing changes.
 
-Restoring replaces the database, uploads and dashboard settings, **including the admin account**, and signs you out. An automatic backup of the current state is saved first to `backups/pre-restore-backup-<timestamp>.zip` in the data directory (`/app/data` with Docker, `/var/lib/agt-event-calendar` for a local installation), and files are swapped so that a failed restore leaves the instance unchanged. Dashboard settings in the backup for keys that `config.yaml` now defines are ignored and listed in the report. The server log and audit log are not changed by a restore, and the restore is recorded in the audit log.
+Restoring replaces the database, uploads and dashboard settings, **including the admin account**, and signs everyone out. An automatic backup of the current state is saved first to `backups/pre-restore-backup-<timestamp>.zip` in the data directory (`/app/data` with Docker, `/var/lib/agt-event-calendar` for a local installation) and kept. The new database and uploads are then put in place, the current ones are set aside as `<name>.restore-old-<timestamp>`, and the restored data is migrated and checked (integrity, references, schema version, tables, and that every referenced image exists) before it is committed. If any of that fails, the set-aside files are put back and the restore reports "The restore failed and was rolled back. Nothing was changed."; your session stays valid. After a successful restore the set-aside files are deleted; any that cannot be deleted are listed in the result and the server log, for you to delete by hand (see [Troubleshooting](#leftover-restore-old-files)).
+
+If even the rollback fails, the app stays in maintenance instead of serving data it cannot trust: see [A restore failed and the app stays in maintenance](#a-restore-failed-and-the-app-stays-in-maintenance). Dashboard settings in the backup for keys that `config.yaml` now defines are ignored and listed in the report. The server log and audit log are not changed by a restore, and the restore is recorded in the audit log.
 
 ### Restoring `config.yaml` by hand
 
@@ -466,7 +468,47 @@ Start with the **Server log** tab in the admin dashboard: warnings and errors sh
 
 ### The server refuses to start
 
-Read the log: `docker compose logs calendar` with Docker, or `journalctl -u agt-event-calendar` for a local installation. An invalid `config.yaml` is reported with the offending key, for example `Invalid config.yaml: server.prot: Unexpected property`. While no admin exists, an `AGT_SETUP_PASSWORD` longer than 1024 characters also stops the server: set a shorter value in `.env` and restart.
+Read the log: `docker compose logs calendar` with Docker, or `journalctl -u agt-event-calendar` for a local installation. An invalid `config.yaml` is reported with the offending key, for example `Invalid config.yaml: server.prot: Unexpected property`. While no admin exists, an `AGT_SETUP_PASSWORD` longer than 1024 characters also stops the server: set a shorter value in `.env` and restart. While `restore-failed.json` exists in the data directory, the server refuses to start: see [A restore failed and the app stays in maintenance](#a-restore-failed-and-the-app-stays-in-maintenance).
+
+### "Maintenance in progress"
+
+A restore is running (or, for a single change, a backup took longer than 30 seconds). Pages show the notice and retry by themselves; wait a moment. `GET /api/health` answers `{ "status": "maintenance" }` meanwhile. If the notice never goes away, a restore failed: see below.
+
+### A restore failed and the app stays in maintenance
+
+If a restore fails and putting the previous data back fails too, the app keeps answering "Maintenance in progress", writes an error to the server log naming the pre-restore backup, and creates `restore-failed.json` in the data directory: `{ "preRestoreBackup": "<file name>", "failedAt": "<time>" }`.
+
+**While the app is still running**, the admin who started the restore can repair it from the same browser session (until that session would have expired): open **Backup & restore**, choose a backup, preview it and restore it. The pre-restore backup named in the marker, in the `backups/` folder of the data directory, is the state before the failed restore; download it from the server first if you don't have a copy. This restore skips the automatic pre-restore backup, and if it succeeds, the marker is removed and the app returns to normal.
+
+**Otherwise, recover by hand.** The server refuses to start while `restore-failed.json` exists. Put the pre-restore backup's database and uploads in place, then delete the marker. Local installation (replace `<file>` with the name in the marker):
+
+```bash
+sudo systemctl stop agt-event-calendar
+cd /var/lib/agt-event-calendar
+sudo mkdir broken && sudo sh -c 'mv agt-calendar.sqlite* uploads broken/ 2>/dev/null; true'
+sudo unzip backups/<file> -d restored
+sudo mkdir -p restored/uploads
+sudo mv restored/database.sqlite agt-calendar.sqlite
+sudo mv restored/uploads uploads
+sudo rm -r restored
+sudo chown -R agt-event-calendar:agt-event-calendar agt-calendar.sqlite uploads
+sudo rm restore-failed.json
+sudo systemctl start agt-event-calendar
+```
+
+With Docker, the data is in the `calendar-data` volume (its full name starts with the Compose project name: `docker volume ls | grep calendar-data`). A throwaway `busybox` container does the same steps:
+
+```bash
+docker compose down
+docker run --rm -v <project>_calendar-data:/data busybox sh -c 'cd /data && mkdir broken && mv agt-calendar.sqlite* uploads broken/; unzip backups/<file> -d restored && mkdir -p restored/uploads && mv restored/database.sqlite agt-calendar.sqlite && mv restored/uploads uploads && rm -r restored && chown -R 1000:1000 agt-calendar.sqlite uploads && rm restore-failed.json'
+docker compose up -d
+```
+
+Sign in, check the data, then delete the `broken` folder and any [leftover set-aside files](#leftover-restore-old-files).
+
+### Leftover `.restore-old-` files
+
+A restore sets the previous database and uploads aside as `agt-calendar.sqlite.restore-old-<timestamp>` and `uploads.restore-old-<timestamp>` in the data directory, and deletes them once the restored data is live. If it could not delete them, the restore result and the server log list them. The app never deletes them later, because after a failed rollback they may hold the only copy of your data. Once you have checked the restored data, delete them by hand: `sudo rm -r /var/lib/agt-event-calendar/*.restore-old-*` for a local installation, or `docker run --rm -v <project>_calendar-data:/data busybox sh -c 'rm -r /data/*.restore-old-*'` with Docker.
 
 ### The calendar can't be reached from another machine
 

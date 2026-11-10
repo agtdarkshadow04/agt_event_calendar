@@ -13,6 +13,8 @@ interface RestoreReport {
   droppedFiles: string[];
   config: { included: boolean; applied: false; text: string | null; identical: boolean; diff: string[] };
   preRestoreBackup: string | null;
+  /** Set-aside paths a restore could not delete (BAK-4 step 6.2). */
+  warnings: string[];
 }
 
 export function BackupPanel({ onSessionEnded }: { onSessionEnded: (notice: string) => void }) {
@@ -51,7 +53,12 @@ export function BackupPanel({ onSessionEnded }: { onSessionEnded: (notice: strin
     try {
       const result = await apiRequest<RestoreReport>('/api/admin/restore', { method: 'POST', body });
       if (action === 'restore') {
-        onSessionEnded(`${t.restoreComplete} ${result.preRestoreBackup ? formatTranslation(t.preRestoreBackup, { file: result.preRestoreBackup }) : ''}`);
+        const notes = [
+          t.restoreComplete,
+          result.preRestoreBackup ? formatTranslation(t.preRestoreBackup, { file: result.preRestoreBackup }) : '',
+          result.warnings.length > 0 ? formatTranslation(t.restoreLeftovers, { paths: result.warnings.join(' ') }) : '',
+        ];
+        onSessionEnded(notes.filter(Boolean).join(' '));
         return;
       }
       setReport(result);

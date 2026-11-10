@@ -332,6 +332,13 @@ export function createSession(db: Db, tokenHash: string, ttlHours: number): stri
   return expires;
 }
 
+/** The expiry of a valid session, or null. */
+export function sessionExpiry(db: Db, tokenHash: string): string | null {
+  const row = db.prepare('SELECT expires_at FROM sessions WHERE token_hash = ? AND expires_at > ?').get(tokenHash, now()) as
+    { expires_at: string } | undefined;
+  return row?.expires_at ?? null;
+}
+
 export function sessionValid(db: Db, tokenHash: string): boolean {
   return db.prepare('SELECT 1 FROM sessions WHERE token_hash = ? AND expires_at > ?').get(tokenHash, now()) !== undefined;
 }

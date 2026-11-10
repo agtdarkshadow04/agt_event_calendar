@@ -7,12 +7,12 @@ import { Value } from '@sinclair/typebox/value';
 import { EVENT_STATUSES, isUuidV4, validateChangeLogInput, validateEventInput, validateHolidayInput } from '../src/lib/validation';
 import type { EventStatus } from '../src/lib/validation';
 import { changedFields, setAudit } from './audit';
-import { CSRF_HEADER, endSession, hasValidSession, requireCsrfHeader, startSession } from './session';
+import { CSRF_HEADER, endSession, hasValidSession, recoverySessionOf, requireCsrfHeader, startSession } from './session';
 import { discardBackup, downloadBackup, previewRestore, restoreBackup } from './backup';
 import { EDITABLE_SETTINGS, SETTING_KEYS } from './config';
 import type { SettingKey } from './config';
 import type { AppContext } from './context';
-import { isDefinedInConfig, setting, settingStates } from './context';
+import { isDefinedInConfig, setting, settingOrDefault, settingStates } from './context';
 import { HttpError, readMultipart } from './http';
 import { removeImageFile, validateImage, writeImageFile } from './images';
 import { registerLogRoutes } from './logRoutes';
@@ -90,7 +90,10 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       response: { 200: SessionSchema, ...errorResponses },
     },
   }, async () => ({
-    username: getAdmin(context.db)?.username ?? null,
+    // While a restore is failed, only the recovery session gets here, and the data is not read (BAK-11).
+    username: context.operation.state === 'restore_failed'
+      ? context.operation.recovery?.username ?? null
+      : getAdmin(context.db)?.username ?? null,
     setupPasswordStillSet: Boolean(context.setupPassword),
     csrfHeader: CSRF_HEADER,
     version: context.version,
@@ -574,7 +577,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   }, async (request, reply) => {
     const form = await readMultipart(request, {
       fileFields: ['backup'],
-      maxFileBytes: setting(context, 'migration.maxZipBytes'),
+      maxFileBytes: settingOrDefault(context, 'migration.maxZipBytes'),
       toDisk: context.config.backupsDir,
     });
     try {
@@ -583,7 +586,12 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       const action = form.fields.action ?? 'preview';
       if (action !== 'preview' && action !== 'restore') throw new HttpError(400, 'invalid_request', 'action must be preview or restore.');
       setAudit(request, { targetType: 'backup', details: { action, fileSizeBytes: statSync(file.path).size } });
-      const report = action === 'preview' ? await previewRestore(context, file.path) : await restoreBackup(context, file.path, { ownActivity: 1 });
+      const report = action === 'preview' ? await previewRestore(context, file.path) : await restoreBackup(context, file.path, {
+          ownActivity: 1,
+          // Recorded when the restore starts; a recovery restore keeps the one already recorded (BAK-11).
+          session: context.operation.state === 'restore_failed' ? null : recoverySessionOf(context, request),
+          log: request.log,
+        });
       setAudit(request, {
         details: {
           backupCreatedAt: report.createdAt,
@@ -594,6 +602,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
           droppedFiles: report.droppedFiles.length,
           configIncluded: report.config.included,
           preRestoreBackup: report.preRestoreBackup,
+          warnings: report.warnings.length,
         },
       });
       if (action === 'restore') endSession(context, request, reply);

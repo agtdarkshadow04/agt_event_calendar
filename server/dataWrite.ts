@@ -9,7 +9,7 @@
  * fails in tests instead of slipping past a backup.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { FastifyInstance, RouteOptions } from 'fastify';
+import type { FastifyInstance, FastifyRequest, RouteOptions } from 'fastify';
 import { HttpError } from './http';
 
 declare module 'fastify' {
@@ -57,7 +57,12 @@ const HEALTH_URL = '/api/health';
  * routes inside `withDataWrite()`, counts every `/api/` request except health, and answers them with
  * `503 maintenance` during a restore. Register before any route.
  */
-export function registerOperationLock(app: FastifyInstance, lock: OperationLock): void {
+export function registerOperationLock(
+  app: FastifyInstance,
+  lock: OperationLock,
+  /** While a restore is failed, admits the recovery session's requests (BAK-11). */
+  isRecoveryRequest: (request: FastifyRequest) => boolean = () => false,
+): void {
   app.addHook('onRoute', (route: RouteOptions) => {
     if (!route.url.startsWith('/api/')) return;
     const writesData = route.config?.writesData;
@@ -75,7 +80,7 @@ export function registerOperationLock(app: FastifyInstance, lock: OperationLock)
   const releases = new WeakMap<object, () => void>();
   app.addHook('onRequest', async (request) => {
     if (!request.url.startsWith('/api/') || request.routeOptions.url === HEALTH_URL) return;
-    if (lock.maintenance) throw maintenanceError();
+    if (lock.maintenance && !(lock.state === 'restore_failed' && isRecoveryRequest(request))) throw maintenanceError();
     releases.set(request, lock.enterActivity());
   });
   const release = async (request: object) => {
@@ -85,6 +90,26 @@ export function registerOperationLock(app: FastifyInstance, lock: OperationLock)
   app.addHook('onRequestAbort', release);
 }
 
+/** The restoring admin's session, recorded when a restore starts (BAK-11). Kept in memory: this is a SQLite app. */
+export interface RecoverySession {
+  tokenHash: string;
+  username: string;
+  /** Epoch milliseconds: the session's own expiry (AUTH-8). */
+  expiresAt: number;
+}
+
+/** Failure injection for the restore tests (TEST-4). Never set outside tests. */
+export interface RestoreTestHooks {
+  /** After the new files are in place and reopened, before the health check (BAK-4 step 5). */
+  afterSwap?: () => void | Promise<void>;
+  /** Inside the step 6.1 transaction, after its deletes. */
+  inCommit?: () => void;
+  /** Before each set-aside path is deleted (step 6.2). */
+  cleanup?: (setAsidePath: string) => void;
+  /** During a rollback, after the files are renamed back (BAK-10). */
+  rollback?: () => void;
+}
+
 export class OperationLock {
   state: OperationState = 'idle';
   /** Overridable for tests (TEST-4: "use an injectable clock or a shorter test limit"). */
@@ -92,6 +117,12 @@ export class OperationLock {
   writeWaitMs = WRITE_WAIT_MS;
   /** Test hook, awaited once an operation has drained and before it does its work. */
   afterDrain: ((state: 'backup' | 'restore') => Promise<void>) | null = null;
+  restoreHooks: RestoreTestHooks = {};
+  /** The session that may recover a failed restore, from the moment a restore starts until it ends normally. */
+  recovery: RecoverySession | null = null;
+  /** File name of the pre-restore backup of the restore in progress or failed (for the marker file). */
+  preRestoreBackup: string | null = null;
+  private failing = false;
 
   private writes = 0;
   private activity = 0;
@@ -173,14 +204,40 @@ export class OperationLock {
     }
   }
 
+  /** Called by a restore whose rollback failed (or a failed recovery restore): the lock ends in `restore_failed`. */
+  markFailed(): void {
+    this.failing = true;
+  }
+
+  /** True for the recorded recovery session while the restore is failed, until the session's expiry (BAK-11). */
+  isRecoverySession(tokenHash: string | null, now = Date.now()): boolean {
+    return this.state === 'restore_failed' && tokenHash !== null && this.recovery !== null
+      && this.recovery.tokenHash === tokenHash && now < this.recovery.expiresAt;
+  }
+
   /**
-   * Runs a backup or restore under the lock. It starts only from `idle` (else `409 conflict`), then drains: a backup
-   * waits for the data writes in progress, a restore for every request and job except its own `ownActivity`. If the
-   * drain is not done after `drainMs`, the lock returns to `idle` with nothing changed and the caller gets `409`.
+   * Runs a backup or restore under the lock. It starts only from `idle` (else `409 conflict`); the one exception is
+   * the recovery restore (`recovery: true`), which starts only from `restore_failed` (BAK-11). Then it drains: a
+   * backup waits for the data writes in progress, a restore for every request and job except its own `ownActivity`.
+   * If the drain is not done after `drainMs`, the lock returns to where it was with nothing changed, and the caller
+   * gets `409`. A restore records `session` as the recovery session; it is cleared when the lock returns to `idle`.
    */
-  async run<T>(state: 'backup' | 'restore', fn: () => Promise<T>, options: { ownActivity?: number } = {}): Promise<T> {
-    if (this.state !== 'idle') throw new HttpError(409, 'conflict', 'A backup or restore is already running.');
+  async run<T>(
+    state: 'backup' | 'restore',
+    fn: () => Promise<T>,
+    options: { ownActivity?: number; recovery?: boolean; session?: RecoverySession | null } = {},
+  ): Promise<T> {
+    const recovery = options.recovery === true;
+    const from = this.state;
+    if (recovery ? !(state === 'restore' && from === 'restore_failed') : from !== 'idle') {
+      throw new HttpError(409, 'conflict', 'A backup or restore is already running.');
+    }
     this.state = state;
+    this.failing = recovery;
+    if (state === 'restore' && !recovery) {
+      this.recovery = options.session ?? null;
+      this.preRestoreBackup = null;
+    }
     this.notify();
     try {
       const own = options.ownActivity ?? 0;
@@ -190,9 +247,16 @@ export class OperationLock {
       );
       if (!drained) throw new HttpError(409, 'conflict', 'The server is busy. Try again.');
       if (this.afterDrain) await this.afterDrain(state);
-      return await fn();
+      const result = await fn();
+      this.failing = false;
+      return result;
     } finally {
-      this.state = 'idle';
+      this.state = this.failing ? 'restore_failed' : 'idle';
+      this.failing = false;
+      if (this.state === 'idle' && state === 'restore') {
+        this.recovery = null;
+        this.preRestoreBackup = null;
+      }
       this.notify();
     }
   }

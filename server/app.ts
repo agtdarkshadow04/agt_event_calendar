@@ -25,7 +25,7 @@ import {
   AltchaChallengeSchema, ApiChangeLogEntrySchema, ApiEventSchema, ApiHolidaySchema, OkSchema,
   PublicSettingsSchema, SetupStatusSchema, SubmissionFormSchema, SubmissionResultSchema, UsernameSchema, binaryResponse,
 } from './schemas';
-import { endSession, hasValidSession, requireCsrfHeader, startSession } from './session';
+import { endSession, hasValidSession, isRecoveryRequest, requireCsrfHeader, startSession } from './session';
 import { ImageRejectedError, removeImageFile, validateImage, writeImageFile } from './images';
 import { MAX_PASSWORD_LENGTH, MAX_USERNAME_LENGTH, MIN_PASSWORD_LENGTH, checkAdminPassword, hashPassword, secretsEqual } from './passwords';
 import {
@@ -119,9 +119,10 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     bodyLimit: 2 * 1024 * 1024,
   }).withTypeProvider<TypeBoxTypeProvider>();
 
-  registerOperationLock(app, context.operation);
-  await registerOpenApi(app, context.version);
+  // Cookies first: the lock's onRequest hook reads the session cookie of a failed restore's recovery session.
   await app.register(fastifyCookie);
+  registerOperationLock(app, context.operation, (request) => isRecoveryRequest(context, request));
+  await registerOpenApi(app, context.version);
   registerAudit(app, context);
   scheduleRetention(app, context);
   await app.register(fastifyMultipart, { throwFileSizeLimit: true });
