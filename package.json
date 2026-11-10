@@ -18,7 +18,8 @@
     "check": "npm run lint && npm test && npm run build",
     "test": "npm run test:client && npm run test:server",
     "test:client": "esbuild src/lib/*.test.ts --bundle --platform=node --format=esm --jsx=automatic --external:react --external:react-dom --outdir=.test-build/client --out-extension:.js=.mjs && node --test .test-build/client/*.test.mjs",
-    "test:server": "esbuild server/test/*.test.ts --bundle --platform=node --target=node26 --format=esm --packages=external --loader:.sql=text --outdir=.test-build/server --out-extension:.js=.mjs && node --test --test-concurrency=1 .test-build/server/*.test.mjs"
+    "test:server": "esbuild server/test/*.test.ts --bundle --platform=node --target=node26 --format=esm --packages=external --loader:.sql=text --outdir=.test-build/server --out-extension:.js=.mjs && node --test --test-concurrency=1 .test-build/server/*.test.mjs",
+    "test:e2e": "npm run build && playwright test"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.5",
@@ -43,6 +44,8 @@
     "yazl": "^3.3.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.65.0",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.6",
     "@types/papaparse": "^5.3.16",

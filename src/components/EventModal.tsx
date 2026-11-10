@@ -6,6 +6,7 @@ import { formatAtUtcOffset } from '../lib/date';
 import { buildGlyphToolUrl, withEventId } from '../lib/urls';
 import type { CalendarEvent } from '../types';
 import { formatTranslation, getTranslations } from '../translations';
+import { useDialog } from './useDialog';
 
 interface EventModalProps {
   selectedEvent: CalendarEvent | null;
@@ -68,48 +69,7 @@ export function EventModal({
     'event-url-copied' | 'bookmark-added' | 'bookmark-removed' | null
   >(null);
 
-  useEffect(() => {
-    if (!selectedEvent) return;
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    const handleKeyDown = (keyEvent: KeyboardEvent) => {
-      if (keyEvent.key === 'Escape') {
-        keyEvent.preventDefault();
-        onClose();
-        return;
-      }
-
-      if (keyEvent.key !== 'Tab' || !dialogRef.current) return;
-      const focusable = Array.from(
-        dialogRef.current.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (
-        keyEvent.shiftKey
-        && (document.activeElement === first || document.activeElement === dialogRef.current)
-      ) {
-        keyEvent.preventDefault();
-        last.focus();
-      } else if (!keyEvent.shiftKey && document.activeElement === last) {
-        keyEvent.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    requestAnimationFrame(() => dialogRef.current?.focus());
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      previouslyFocused?.focus();
-    };
-  }, [selectedEvent, onClose]);
+  useDialog(dialogRef, dialogRef, onClose, Boolean(selectedEvent));
 
   useEffect(() => {
     setCoverFailed(false);

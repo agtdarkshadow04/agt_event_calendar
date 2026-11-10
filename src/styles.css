@@ -532,6 +532,11 @@ a {
   grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
+/* Week rows exist for assistive technology only; their cells are laid out by .calendar-grid. */
+.calendar-row {
+  display: contents;
+}
+
 .weekday {
   min-width: 0;
   padding: 0.8rem 0.45rem;
@@ -563,7 +568,7 @@ a {
   background: rgba(17, 17, 17, 0.76);
 }
 
-.calendar-day:nth-child(7n + 14) {
+.calendar-day:nth-child(7) {
   border-right: 0;
 }
 
@@ -1374,6 +1379,8 @@ a {
 @media (max-width: 760px) {
   .header-content {
     min-height: 4.35rem;
+    /* At large font scales the actions wrap instead of widening the page (UI-12, A11Y-6). */
+    flex-wrap: wrap;
   }
 
   .agt-emblem {
@@ -1405,6 +1412,10 @@ a {
   }
 
   .header-actions {
+    min-width: 0;
+    max-width: 100%;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
     gap: 0.8rem;
   }
 
@@ -1441,7 +1452,7 @@ a {
   }
 
   .month-picker {
-    min-width: 10rem;
+    min-width: min(10rem, 100%);
     flex: 1;
   }
 

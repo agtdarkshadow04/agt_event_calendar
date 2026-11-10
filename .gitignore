@@ -6,6 +6,11 @@ dist/
 coverage/
 .test-build/
 
+# Browser tests (REPO-2)
+test-results/
+playwright-report/
+tests/e2e/.auth/
+
 # Self-hosting
 .env
 .env.*

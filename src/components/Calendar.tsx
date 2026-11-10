@@ -51,6 +51,7 @@ export function Calendar({
   const translations = getTranslations(locale);
   const today = dateAtUtcOffset(new Date(), timeZoneOffset);
   const days = useMemo(() => getMonthGrid(viewDate), [viewDate]);
+  const weeks = useMemo(() => Array.from({ length: Math.ceil(days.length / 7) }, (_, week) => days.slice(week * 7, week * 7 + 7)), [days]);
   const monthFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }),
     [locale],
@@ -149,17 +150,22 @@ export function Calendar({
             )}
       </p>
 
+      {/* Rows use display: contents, so the cells stay in the 7-column CSS grid (A11Y-3: grid > row > cell). */}
       <div className="calendar-grid" role="grid" aria-label={translations.eventCalendar}>
-        {weekdays.map(([full, short]) => (
-          <div className="weekday" role="columnheader" key={full}>
-            <span className="weekday-full">{full}</span>
-            <span className="weekday-short" aria-hidden="true">
-              {short}
-            </span>
-          </div>
-        ))}
+        <div className="calendar-row" role="row">
+          {weekdays.map(([full, short]) => (
+            <div className="weekday" role="columnheader" key={full}>
+              <span className="weekday-full">{full}</span>
+              <span className="weekday-short" aria-hidden="true">
+                {short}
+              </span>
+            </div>
+          ))}
+        </div>
 
-        {days.map((day) => {
+        {weeks.map((week) => (
+          <div className="calendar-row" role="row" key={localDateKey(week[0])}>
+        {week.map((day) => {
           const dayEvents = events.filter((event) =>
             eventOccursOnLocalDay(event, day, timeZoneOffset),
           );
@@ -172,11 +178,12 @@ export function Calendar({
                 isToday ? ' current-day' : ''
               }`}
               role="gridcell"
-              aria-label={dayLabelFormatter.format(day)}
               key={localDateKey(day)}
             >
               <div className="day-number-row">
-                <time dateTime={localDateKey(day)}>
+                {/* The full date for screen readers; the visible day number alone would be ambiguous. */}
+                <span className="sr-only">{dayLabelFormatter.format(day)}</span>
+                <time dateTime={localDateKey(day)} aria-hidden="true">
                   {day.getDate()}
                 </time>
                 {isToday && (
@@ -188,7 +195,6 @@ export function Calendar({
                 {dayEvents.map((event) => {
                   const position = eventDayPosition(event, day, timeZoneOffset);
                   const context = positionLabel(position, translations);
-                  const showTime = position === 'single' || position === 'start';
 
                   return (
                     <button
@@ -197,16 +203,6 @@ export function Calendar({
                       data-position={position}
                       key={`${event.id}-${localDateKey(day)}`}
                       onClick={() => onSelectEvent(event)}
-                      aria-label={formatTranslation(
-                        showTime
-                          ? translations.eventDetailsAtTime
-                          : translations.eventDetails,
-                        {
-                          name: event.name,
-                          context: context || translations.event,
-                          time: formatTime(event.start),
-                        },
-                      )}
                     >
                       <span className="event-chip-time">
                         {context || formatTime(event.start)}
@@ -219,6 +215,8 @@ export function Calendar({
             </div>
           );
         })}
+          </div>
+        ))}
       </div>
     </section>
   );

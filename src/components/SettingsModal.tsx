@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   createDefaultSettings,
   AUTO_TIME_ZONE,
@@ -15,6 +15,7 @@ import type {
 } from '../lib/settings';
 import { HistoryIcon, ReloadIcon, SettingsIcon, XIcon } from './Icons';
 import { getTranslations } from '../translations';
+import { useDialog } from './useDialog';
 
 interface SettingsModalProps {
   settings: AppSettings;
@@ -49,44 +50,7 @@ export function SettingsModal({
     message: '',
   });
 
-  useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    const handleKeyDown = (keyEvent: KeyboardEvent) => {
-      if (keyEvent.key === 'Escape') {
-        keyEvent.preventDefault();
-        onClose();
-        return;
-      }
-
-      if (keyEvent.key !== 'Tab' || !dialogRef.current) return;
-      const focusable = Array.from(
-        dialogRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (keyEvent.shiftKey && document.activeElement === first) {
-        keyEvent.preventDefault();
-        last.focus();
-      } else if (!keyEvent.shiftKey && document.activeElement === last) {
-        keyEvent.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    requestAnimationFrame(() => closeButtonRef.current?.focus());
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      previouslyFocused?.focus();
-    };
-  }, [onClose]);
+  useDialog(dialogRef, closeButtonRef, onClose);
 
   const update = <K extends keyof AppSettings>(
     key: K,
@@ -294,6 +258,9 @@ export function SettingsModal({
             ref={fileInputRef}
             className="sr-only"
             type="file"
+            // Opened by the Import button below; it has a name for assistive technology but no tab stop of its own.
+            tabIndex={-1}
+            aria-label={translations.import}
             accept="application/json,.json"
             onChange={(event) => {
               const file = event.target.files?.[0];

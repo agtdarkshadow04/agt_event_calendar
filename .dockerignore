@@ -9,3 +9,8 @@ data
 config.yaml
 .git
 *.log
+
+# Browser tests (REPO-2)
+test-results
+playwright-report
+tests/e2e/.auth

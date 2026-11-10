@@ -4,6 +4,7 @@ import { apiRequest, isAbortError } from '../lib/client';
 import { splitChanges } from '../lib/validation';
 import { getTranslations } from '../translations';
 import { HistoryIcon, XIcon } from './Icons';
+import { useDialog } from './useDialog';
 
 interface ChangeLogModalProps {
   locale: string;
@@ -20,43 +21,7 @@ export function ChangeLogModal({ locale, onClose }: ChangeLogModalProps) {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [requestVersion, setRequestVersion] = useState(0);
 
-  useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    const handleKeyDown = (keyEvent: KeyboardEvent) => {
-      if (keyEvent.key === 'Escape') {
-        keyEvent.preventDefault();
-        onClose();
-        return;
-      }
-      if (keyEvent.key !== 'Tab' || !dialogRef.current) return;
-      const focusable = Array.from(
-        dialogRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      );
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (keyEvent.shiftKey && document.activeElement === first) {
-        keyEvent.preventDefault();
-        last?.focus();
-      } else if (!keyEvent.shiftKey && document.activeElement === last) {
-        keyEvent.preventDefault();
-        first?.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    const frame = requestAnimationFrame(() => closeButtonRef.current?.focus());
-    return () => {
-      cancelAnimationFrame(frame);
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      previouslyFocused?.focus();
-    };
-  }, [onClose]);
+  useDialog(dialogRef, closeButtonRef, onClose);
 
   useEffect(() => {
     const controller = new AbortController();

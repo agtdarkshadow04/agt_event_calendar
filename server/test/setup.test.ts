@@ -113,13 +113,25 @@ describe('admin sessions', () => {
     assert.equal((await login(ADMIN.password)).statusCode, 429);
   });
 
-  it('marks the cookie Secure behind a TLS-terminating proxy', async () => {
-    const test = await server({ config: 'server:\n  trustProxy: true\n' });
-    const response = await test.app.inject({
-      method: 'POST', url: '/api/setup', headers: { ...CSRF, 'x-forwarded-proto': 'https' },
-      payload: { setupPassword: SETUP_PASSWORD, ...ADMIN },
+  it('marks the cookie Secure behind a trusted TLS-terminating proxy, and ignores the header otherwise (TEST-8)', async () => {
+    const viaProxy = { ...CSRF, 'x-forwarded-proto': 'https', 'x-forwarded-for': '203.0.113.5' };
+    // The proxy connects from 127.0.0.1, the address set in server.trustProxy.
+    const trusted = await server({ config: 'server:\n  trustProxy: 127.0.0.1\n' });
+    const setup = await trusted.app.inject({
+      method: 'POST', url: '/api/setup', headers: viaProxy, payload: { setupPassword: SETUP_PASSWORD, ...ADMIN }, remoteAddress: '127.0.0.1',
     });
-    assert.match(String(response.headers['set-cookie']), /Secure/);
+    assert.equal(setup.statusCode, 201);
+    assert.match(String(setup.headers['set-cookie']), /; Secure/);
+    const login = await trusted.app.inject({ method: 'POST', url: '/api/admin/login', headers: viaProxy, payload: ADMIN, remoteAddress: '127.0.0.1' });
+    assert.match(String(login.headers['set-cookie']), /; Secure/);
+
+    // Without trustProxy, X-Forwarded-Proto is ignored: the request is plain HTTP.
+    const direct = await server();
+    const response = await direct.app.inject({
+      method: 'POST', url: '/api/setup', headers: viaProxy, payload: { setupPassword: SETUP_PASSWORD, ...ADMIN }, remoteAddress: '127.0.0.1',
+    });
+    assert.equal(response.statusCode, 201);
+    assert.doesNotMatch(String(response.headers['set-cookie']), /Secure/);
   });
 
   it('rejects and purges expired sessions', async () => {
