@@ -1,6 +1,6 @@
 # AGT Event Calendar
 
-> **AI Disclosure:** This software was created using generative AI. Its functionality has been verified by human review.
+> **AI Disclosure:** This software was created using generative AI.
 
 AGT Event Calendar is a self-hosted calendar for events hosted by the Alliance of Galactic Travellers and related No Man's Sky communities. It runs completely locally, with **Docker Compose** or as a **systemd service** on Ubuntu/Debian: a Fastify server with a SQLite database serves the React calendar, an in-app event submission form with a moderation queue, and an admin dashboard.
 
@@ -14,9 +14,9 @@ AGT Event Calendar is a self-hosted calendar for events hosted by the Alliance o
 - [First run](#first-run)
 - [Configuration reference](#configuration-reference)
 - [Admin dashboard](#admin-dashboard)
-- [Logs](#logs)
 - [Migrating from Amplify](#migrating-from-amplify)
 - [Backup & restore](#backup--restore)
+- [Logs](#logs)
 - [Content safety](#content-safety)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
@@ -295,25 +295,6 @@ Anyone can submit an event with **Add an Event** (`+` in the header). Submission
 
 Every event gets an RFC 9562 version 4 UUID. Events imported by **Migrate from Amplify** also keep their old 4-hex ID only to resolve old links: `?event_id=0001` opens the migrated event and the address bar is rewritten to its UUID, and bookmarks saved with old IDs are converted to UUIDs once, the next time the calendar loads. Bookmark import accepts both kinds of IDs; share links and bookmark exports always use UUIDs.
 
-## Logs
-
-The app keeps two logs in their own SQLite file, `logs.sqlite` in the data directory (`storage.logDatabaseFile`), next to the main database. Both are shown in the admin dashboard with filters, paging and an entry detail view, and both can be exported as JSON Lines or CSV (**Export**; CSV cells that would start a spreadsheet formula are prefixed with `'`). Times are stored in UTC and shown in your chosen time zone.
-
-| | Server log | Audit log |
-| --- | --- | --- |
-| Contains | What the server did by itself: startup (version, schema versions, listen address, configuration file or defaults), configuration warnings such as the `AGT_SETUP_PASSWORD` reminders, database migrations, log retention runs, unexpected errors (with the error message and stack) and shutdown | What users did: every change, sign-in and sign-out, first-run setup, password change, submission, backup download, restore, migration, log export, and every denied (401/403), rate-limited (429) or failed attempt |
-| Levels / outcomes | `info`, `warn`, `error`, `fatal` (debug and trace lines go to stdout only) | `success`, `denied`, `rate_limited`, `failure` |
-| Retention | `logs.serverRetentionDays` (30 days), `logs.serverMaxEntries` (100 000) | `logs.auditRetentionDays` (365 days, at least 30), `logs.auditMaxEntries` (1 000 000) |
-| Admin can | Filter, search, export and **Clear log** | Filter, search and export. It cannot be edited or cleared |
-
-Retention runs at startup and then hourly: it deletes entries older than the retention period, then the oldest entries above the cap. Each run that deletes something is recorded in the server log. The retention settings are in **Settings** (or `logs.*` in `config.yaml`), and changing them is itself audited.
-
-Each audit entry records the actor (`admin` with the username, or `anonymous`), the action (the API's `operationId`, for example `createAdminEvent`, `login` or `submitEvent`), the route, the affected resource, the outcome, the HTTP status, a request ID and a short summary of the change: names and changed field names, the old and new value of changed settings, file sizes and report counts. Passwords, Markdown descriptions, file contents and the values of fields that failed validation are never logged. Repeated failed attempts from the same client within a minute are merged into one entry with a count. When a request fails with an unexpected error, the audit entry and the server log entry share the same request ID. Access logs ("request completed") are not stored; the stdout log follows `server.logLevel` as before.
-
-**Privacy.** The audit log never stores IP addresses. It stores a pseudonymous network identifier: a keyed hash (HMAC-SHA256, 16 hex characters) of the client address, with IPv6 addresses cut to their /64 network, and a key generated once and kept in the log store. The identifier lets you see that attempts came from the same network without revealing the address. Behind a reverse proxy, set `server.trustProxy` so the hash is of the visitor's address rather than the proxy's. The audit log also holds the admin username and, for public submissions, the submitter's AGT username, for `logs.auditRetentionDays`. The submission form tells visitors that submissions are logged with a pseudonymous network identifier for abuse prevention.
-
-Logs are **not** part of backups, and a restore leaves both logs untouched; the restore itself is recorded in the audit log.
-
 ## Migrating from Amplify
 
 **Migrate from Amplify** imports the old Amplify-era data (the published Google Sheets tabs plus the `agt_event_calendar_files` repository) from **one ZIP file** that you assemble. The server makes no network requests during migration.
@@ -416,6 +397,25 @@ sudo sh -c 'unzip -p agt-event-calendar-backup-<timestamp>.zip config.yaml > /et
 sudo systemctl restart agt-event-calendar
 ```
 
+## Logs
+
+The app keeps two logs in their own SQLite file, `logs.sqlite` in the data directory (`storage.logDatabaseFile`), next to the main database. Both are shown in the admin dashboard with filters, paging and an entry detail view, and both can be exported as JSON Lines or CSV (**Export**; CSV cells that would start a spreadsheet formula are prefixed with `'`). Times are stored in UTC and shown in your chosen time zone.
+
+| | Server log | Audit log |
+| --- | --- | --- |
+| Contains | What the server did by itself: startup (version, schema versions, listen address, configuration file or defaults), configuration warnings such as the `AGT_SETUP_PASSWORD` reminders, database migrations, log retention runs, unexpected errors (with the error message and stack) and shutdown | What users did: every change, sign-in and sign-out, first-run setup, password change, submission, backup download, restore, migration, log export, and every denied (401/403), rate-limited (429) or failed attempt |
+| Levels / outcomes | `info`, `warn`, `error`, `fatal` (debug and trace lines go to stdout only) | `success`, `denied`, `rate_limited`, `failure` |
+| Retention | `logs.serverRetentionDays` (30 days), `logs.serverMaxEntries` (100 000) | `logs.auditRetentionDays` (365 days, at least 30), `logs.auditMaxEntries` (1 000 000) |
+| Admin can | Filter, search, export and **Clear log** | Filter, search and export. It cannot be edited or cleared |
+
+Retention runs at startup and then hourly: it deletes entries older than the retention period, then the oldest entries above the cap. Each run that deletes something is recorded in the server log. The retention settings are in **Settings** (or `logs.*` in `config.yaml`), and changing them is itself audited.
+
+Each audit entry records the actor (`admin` with the username, or `anonymous`), the action (the API's `operationId`, for example `createAdminEvent`, `login` or `submitEvent`), the route, the affected resource, the outcome, the HTTP status, a request ID and a short summary of the change: names and changed field names, the old and new value of changed settings, file sizes and report counts. Passwords, Markdown descriptions, file contents and the values of fields that failed validation are never logged. Repeated failed attempts from the same client within a minute are merged into one entry with a count. When a request fails with an unexpected error, the audit entry and the server log entry share the same request ID. Access logs ("request completed") are not stored; the stdout log follows `server.logLevel` as before.
+
+**Privacy.** The audit log never stores IP addresses. It stores a pseudonymous network identifier: a keyed hash (HMAC-SHA256, 16 hex characters) of the client address, with IPv6 addresses cut to their /64 network, and a key generated once and kept in the log store. The identifier lets you see that attempts came from the same network without revealing the address. Behind a reverse proxy, set `server.trustProxy` so the hash is of the visitor's address rather than the proxy's. The audit log also holds the admin username and, for public submissions, the submitter's AGT username, for `logs.auditRetentionDays`. The submission form tells visitors that submissions are logged with a pseudonymous network identifier for abuse prevention.
+
+Logs are **not** part of backups, and a restore leaves both logs untouched; the restore itself is recorded in the audit log.
+
 ## Content safety
 
 The goal: content from submissions, dashboard edits, migrated files or restored backups can never load or run scripts.
@@ -447,7 +447,7 @@ Then run `npm run test:e2e`. Failures leave a trace in `test-results/`; open it 
 
 For local development, start the API with a setup password, for example `AGT_SETUP_PASSWORD=dev-setup-password npm run dev:server`.
 
-The app follows the [AGT Web Application Specification](docs/agt-webapp-spec.md) v4.0.0, a pinned copy from [`agtdarkshadow04/agt_webapp_specification`](https://github.com/agtdarkshadow04/agt_webapp_specification); [`AGENTS.md`](AGENTS.md) is the guide for AI coding agents and lists where the app deviates from the spec.
+The app follows the [AGT Web Application Specification](docs/agt-webapp-spec.md) v6.0.0, a pinned copy from [`agtdarkshadow04/agt_webapp_specification`](https://github.com/agtdarkshadow04/agt_webapp_specification); [`AGENTS.md`](AGENTS.md) is the guide for AI coding agents and lists where the app deviates from the spec.
 
 **API:** the REST API is described by an OpenAPI 3.1 document generated from the route schemas and served at `/api/openapi.json`. Admin routes need the session cookie from `POST /api/admin/login`; state-changing admin, setup and login requests also need the header `x-agt-request: 1`.
 

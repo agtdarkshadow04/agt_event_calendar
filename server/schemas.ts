@@ -46,7 +46,7 @@ export const ErrorBodySchema = Type.Object({
 }, { description: 'Error response.' });
 
 export const OkSchema = Type.Object({ ok: Type.Literal(true) });
-export const IdParams = Type.Object({ id: Type.String({ maxLength: 64 }) });
+export const IdParams = Type.Object({ id: Type.String({ maxLength: 64 }) }, { additionalProperties: false });
 export const NoContent = Type.Null({ description: 'No content.' });
 export const BinaryFile = Type.String({ format: 'binary' });
 

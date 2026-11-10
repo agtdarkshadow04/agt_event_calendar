@@ -31,9 +31,20 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
   `field_too_large` and `defined_in_config` carry `params`. Clients that show `message` keep working
   ([#63](https://github.com/agtdarkshadow04/agt_event_calendar/issues/63)).
 - **`altcha.hmacKey` is ignored.** The captcha key is now always generated and stored in the database. If
-  `config.yaml` sets it, remove the line: the server log warns at every startup until you do, and a later release
-  will reject it as an unknown key. Captcha challenges issued before the upgrade fail once, and visitors verify again
+  `config.yaml` sets it, remove the line: the server log warns at every startup until you do, and 4.0.0 will
+  reject it as an unknown key. Captcha challenges issued before the upgrade fail once, and visitors verify again
   ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
+- **Backups and restores are stricter.** Backups made by AGT Event Calendar 2.x restore unchanged. An archive whose
+  `manifest.json` has extra or missing fields, lists a file that is missing or misses one that is present, uses an
+  unsafe path, or has a newer `formatVersion` is now rejected with `422 archive_rejected`, and so is a backup whose
+  admin password hash is malformed. A backup or restore now waits up to 30 seconds for changes in progress and answers
+  `409 conflict` if the server is still busy; during a restore the app answers `503` "Maintenance in progress". If a
+  restore and its rollback both fail, the server refuses to start until `restore-failed.json` is removed (README:
+  *A restore failed and the app stays in maintenance*) ([#61](https://github.com/agtdarkshadow04/agt_event_calendar/issues/61),
+  [#62](https://github.com/agtdarkshadow04/agt_event_calendar/issues/62)).
+- **API clients: `POST /api/admin/logout` needs a valid session**, like every admin route except login (AUTH-9);
+  without one it now answers `401 unauthorized` instead of `200`
+  ([#66](https://github.com/agtdarkshadow04/agt_event_calendar/issues/66)).
 
 ### Added
 
@@ -89,6 +100,11 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
   their visible text (plus the full date for screen readers), the settings import field has a name and no tab stop of
   its own, every dialog uses the shared dialog behaviour, and the header and month picker no longer overflow at 300 px
   with the 2× font scale ([#65](https://github.com/agtdarkshadow04/agt_event_calendar/issues/65)).
+- The app follows the AGT Web Application Specification 6.0.0 (`docs/agt-webapp-spec.md`, pinned to tag `v6.0.0`);
+  the README's disclosure line, section order and spec references follow it
+  ([#66](https://github.com/agtdarkshadow04/agt_event_calendar/issues/66)).
+- The OpenAPI document gives logout the session-and-CSRF `security` of every other admin write, and path parameters
+  reject unknown properties ([#66](https://github.com/agtdarkshadow04/agt_event_calendar/issues/66)).
 - The calendar and dashboard use the AGT base stylesheet (`src/agt-base.css`, copied unmodified from the spec), which
   also brings the darker primary-button colour `--agt-red-orange: #cb4c2b` for contrast
   ([#64](https://github.com/agtdarkshadow04/agt_event_calendar/issues/64)).
@@ -99,7 +115,8 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 
 ### Deprecated
 
-- `altcha.hmacKey` in `config.yaml`: accepted but ignored, with a startup warning
+- `altcha.hmacKey` in `config.yaml`: accepted but ignored, with a startup warning. There is no replacement: the key is
+  generated. It will be removed in 4.0.0, when a leftover key stops the server as an unknown key
   ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
 
 ### Removed

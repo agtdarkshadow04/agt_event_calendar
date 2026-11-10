@@ -27,7 +27,7 @@ declare module 'fastify' {
 export const SECURITY = {
   /** Anonymous; no cookie or header needed. */
   public: [],
-  /** Anonymous, but the CSRF header is required (setup, login, logout). */
+  /** Anonymous, but the CSRF header is required (first-run setup and login). */
   csrf: [{ csrfHeader: [] }],
   /** Admin reads: a valid session cookie. */
   adminRead: [{ sessionCookie: [] }],

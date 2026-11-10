@@ -23,10 +23,10 @@ import { HttpError, isLoopbackAddress, readMultipart } from './http';
 import { createLogger, scheduleRetention } from './logs';
 import { SECURITY, errorResponses, registerOpenApi } from './openapi';
 import {
-  AltchaChallengeSchema, ApiChangeLogEntrySchema, ApiEventSchema, ApiHolidaySchema, OkSchema,
+  AltchaChallengeSchema, ApiChangeLogEntrySchema, ApiEventSchema, ApiHolidaySchema,
   PublicSettingsSchema, SetupStatusSchema, SubmissionFormSchema, SubmissionResultSchema, UsernameSchema, binaryResponse,
 } from './schemas';
-import { endSession, hasValidSession, isRecoveryRequest, requireCsrfHeader, startSession } from './session';
+import { hasValidSession, isRecoveryRequest, requireCsrfHeader, startSession } from './session';
 import { ImageRejectedError, removeImageFile, validateImage, writeImageFile } from './images';
 import { MAX_PASSWORD_LENGTH, MAX_USERNAME_LENGTH, MIN_PASSWORD_LENGTH, checkAdminPassword, hashPassword, secretsEqual } from './passwords';
 import {
@@ -515,19 +515,6 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     setAudit(request, { actorType: 'admin', actor: admin.username });
     startSession(context, request, reply);
     return { username: admin.username };
-  });
-
-  app.post('/api/admin/logout', {
-    config: { writesData: false },
-    schema: {
-      operationId: 'logout', tags: ['auth'], summary: 'Ends the current admin session.',
-      security: SECURITY.csrf,
-      response: { 200: OkSchema, ...errorResponses },
-    },
-  }, async (request, reply) => {
-    requireCsrfHeader(request);
-    endSession(context, request, reply);
-    return { ok: true as const };
   });
 
   await app.register(async (admin) => registerAdminRoutes(admin, context));

@@ -84,6 +84,19 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
 
   // ------------------------------------------------------------- account
 
+  // Like every admin route except login, logout needs a valid session (AUTH-9), checked by the hook above.
+  app.post('/api/admin/logout', {
+    config: { writesData: false },
+    schema: {
+      operationId: 'logout', tags: ['auth'], summary: 'Ends the current admin session.',
+      security: SECURITY.adminWrite,
+      response: { 200: OkSchema, ...errorResponses },
+    },
+  }, async (request, reply) => {
+    endSession(context, request, reply);
+    return { ok: true as const };
+  });
+
   app.get('/api/admin/session', {
     config: { writesData: false },
     schema: {

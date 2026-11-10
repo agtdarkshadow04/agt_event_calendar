@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
+import { SECURITY } from '../openapi';
 import { CSRF, createTestServer, setupAdmin } from './helpers';
 import type { TestServer } from './helpers';
 
@@ -71,11 +72,11 @@ describe('OpenAPI document', () => {
       }
       assert.ok(responses.default?.content?.['application/json']?.schema, `${label} documents the error body as default`);
 
-      if (route.url.startsWith('/api/admin/') && route.url !== '/api/admin/login' && route.url !== '/api/admin/logout') {
-        const schemes = (operation.security ?? []).flatMap((requirement) => Object.keys(requirement));
-        assert.ok(schemes.includes('sessionCookie'), `${label} requires the session cookie`);
-        if (route.method !== 'GET') assert.ok(schemes.includes('csrfHeader'), `${label} requires the CSRF header`);
-      }
+      // The API-11 table: what each route really requires.
+      const expected = route.url === '/api/setup' || route.url === '/api/admin/login' ? SECURITY.csrf
+        : !route.url.startsWith('/api/admin/') ? SECURITY.public
+          : route.method === 'GET' ? SECURITY.adminRead : SECURITY.adminWrite;
+      assert.deepEqual(operation.security, expected, `${label} security`);
     }
   });
 
@@ -96,7 +97,7 @@ describe('admin route protection', () => {
   it('rejects every admin route without a session, and every admin mutation without the CSRF header', async () => {
     const test = await server();
     const adminRoutes = test.app.apiRoutes.filter((route) =>
-      route.url.startsWith('/api/admin/') && route.url !== '/api/admin/login' && route.url !== '/api/admin/logout');
+      route.url.startsWith('/api/admin/') && route.url !== '/api/admin/login');
     assert.ok(adminRoutes.length >= 25);
     for (const route of adminRoutes) {
       const method = route.method as 'GET' | 'POST' | 'PUT' | 'DELETE';
