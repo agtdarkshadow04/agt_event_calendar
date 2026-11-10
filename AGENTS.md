@@ -11,9 +11,11 @@ write rarely, the data is small, and one process owns it. Deployment: Docker Com
 local systemd service on Ubuntu/Debian (`deploy/agt-event-calendar.service`); both are documented in `README.md`.
 
 This app follows, and is the reference implementation of, the
-**[AGT Web Application Specification](docs/agt-webapp-spec.md) v3.0.0**. Read it before changing architecture,
-API, security, UI or deployment. Where this app differs from the spec, see
-[Deviations](#deviations-from-the-agt-web-app-spec) below.
+**[AGT Web Application Specification](docs/agt-webapp-spec.md) v4.0.0**
+(`agtdarkshadow04/agt_webapp_specification@v4.0.0`). Read it before changing architecture, API, security, UI or
+deployment. `docs/agt-webapp-spec.md` is a pinned copy of that tag: never edit it (SPEC-2). Propose rule changes as
+a PR to the spec repository (SPEC-4); move to a newer spec version in a PR of its own (SPEC-3). Where this app
+differs from the spec, see [Deviations](#deviations-from-the-agt-web-app-spec) below.
 
 ## Branches (read first)
 
@@ -75,7 +77,7 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 | `src/styles.css` | All public styling (grep for the class you need); admin styles in `src/admin/admin.css` |
 | `public/` | Static assets incl. the bundled fonts (NMS Futura, NMS Glyphs Mono, flags). Large binaries — don't open |
 | `deploy/` | systemd unit and Caddy example for local installations |
-| `docs/agt-webapp-spec.md` | The AGT Web Application Specification (normative for all AGT apps) |
+| `docs/agt-webapp-spec.md` | Pinned copy of the AGT Web Application Specification v4.0.0. Never edit; source: `agtdarkshadow04/agt_webapp_specification` |
 
 ## Conventions and gotchas
 
@@ -121,6 +123,9 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 - Commit messages: short imperative sentence (e.g. “Add event action toast notifications”).
 
 ## Deviations from the AGT web app spec
+
+This table is the only list of the calendar's deviations; the spec itself no longer has one. Rows not marked
+"to fix" are kept on purpose: **don't copy them into other apps.**
 
 | Rule | What differs | Why |
 | --- | --- | --- |
