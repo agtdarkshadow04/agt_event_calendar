@@ -2,10 +2,11 @@
 
 | | |
 | --- | --- |
-| **Spec version** | 3.0.0 |
+| **Spec version** | 4.0.0 |
 | **Status** | Normative |
 | **Audience** | AI coding agents that design, build, review or maintain AGT web applications |
-| **Reference implementation** | [`Folfchie/agt_event_calendar`](https://github.com/Folfchie/agt_event_calendar) (AGT Event Calendar), with the deviations listed in [Appendix A](#appendix-a-reference-implementation-deviations) |
+| **Source** | [`agtdarkshadow04/agt_webapp_specification`](https://github.com/agtdarkshadow04/agt_webapp_specification), released as tags `vX.Y.Z` (SPEC-1) |
+| **Reference implementation** | [`agtdarkshadow04/agt_event_calendar`](https://github.com/agtdarkshadow04/agt_event_calendar) (AGT Event Calendar); its deviations are listed in its `AGENTS.md` |
 
 This document defines how every Alliance of Galactic Travellers (AGT) web application is built: stack,
 repository layout, API, data storage, configuration, authentication, security, backups, UI design,
@@ -30,12 +31,33 @@ change an existing one.
 - **Precedence.** This spec is the baseline. An app's `AGENTS.md` MAY tighten a rule but MUST NOT loosen one
   unless it lists the rule under **Deviations from the AGT web app spec**, giving the rule ID and the reason.
   A deviation that is not documented is a bug.
-- **When the spec is silent,** do what the reference implementation does. If the reference implementation
-  is listed in Appendix A for that topic, follow the spec, not the reference.
-- **Changing this spec.** Change it in a PR of its own. Bump the spec version (this is separate from the apps'
-  versions, which follow [§21](#21-versioning-and-releases)): major for a new or stricter MUST,
-  minor for a new SHOULD/MAY or a new section, patch for clarifications. New design tokens, locales and
-  registry entries are added here first, then in apps.
+- **When the spec is silent,** do what the reference implementation does, except where its `AGENTS.md` lists a
+  deviation for that topic: then follow the spec, not the reference. The calendar's app-specific features
+  (Migrate from Amplify, legacy 4-hex event IDs, bookmarks, national holidays and the change-log content type,
+  the anthem audio, the portal glyph tool link) are examples, not templates.
+
+### 0.1 Where the spec lives
+
+- **SPEC-1** The source of truth is the `agt-webapp-spec.md` file in the
+  [`agtdarkshadow04/agt_webapp_specification`](https://github.com/agtdarkshadow04/agt_webapp_specification)
+  repository. Each spec release is an annotated tag `vX.Y.Z` on its `main` branch, with an entry in that repository's
+  `CHANGELOG.md`. Released tags are never moved or deleted.
+- **SPEC-2** Every app keeps a **pinned copy** of the spec version it follows at `docs/agt-webapp-spec.md`,
+  byte-identical to `agt-webapp-spec.md` at that release tag. The app's `AGENTS.md` names the version and the tag
+  (DOC-2). Never edit the copy: the app's differences go in its deviations table, and changes to the rules go to the
+  spec repository as a PR. Agents read the pinned copy, not the spec repository's `main`, so they follow the rules
+  the app has actually adopted.
+- **SPEC-3** Moving an app to a newer spec version is a PR of its own in the app's repository. It replaces the copy
+  with the file from the new tag and updates the version and tag in `AGENTS.md`. It then either implements the new
+  rules or lists each unimplemented one as a deviation marked "to fix". An app may lag behind the newest spec, but
+  its `AGENTS.md` always states which version it follows.
+- **SPEC-4** **Changing this spec.** Open a PR in the spec repository that changes only the spec, its `README.md`
+  and `CHANGELOG.md`. Bump the spec version (separate from the apps' versions, which follow
+  [§21](#21-versioning-and-releases)): major for a new or stricter MUST, minor for a new SHOULD/MAY or a new
+  section, patch for clarifications. Add a `CHANGELOG.md` entry in the same PR, keeping requirement IDs stable:
+  never reuse or renumber an ID, and mark a removed rule as removed instead of deleting its ID silently. New design
+  tokens, locales and registry entries are added here first, then in apps. As with apps (VER-12), agents create
+  release tags only when the maintainer asks.
 
 ## 1. Principles
 
@@ -81,7 +103,7 @@ Add a row (next free port) when you create an app.
 
 | Slug | Display name | Repository | Default port | Database |
 | --- | --- | --- | --- | --- |
-| `event-calendar` | AGT Event Calendar | `Folfchie/agt_event_calendar` | 8080 | SQLite |
+| `event-calendar` | AGT Event Calendar | `agtdarkshadow04/agt_event_calendar` | 8080 | SQLite |
 
 ## 3. Technology stack
 
@@ -124,6 +146,7 @@ agt_<app_snake>/
 ├── README.md                 # operator documentation (§20.1)
 ├── LICENSE
 ├── CHANGELOG.md              # release notes (§21.5)
+├── docs/agt-webapp-spec.md   # pinned copy of the spec version the app follows (SPEC-2); never edited
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example              # secrets/bootstrap only, documented
@@ -1313,8 +1336,8 @@ Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods 
 ### 20.2 AGENTS.md (for agents)
 
 - **DOC-2** `AGENTS.md` is the agent entry point; `CLAUDE.md` contains only `@AGENTS.md`. It MUST contain, in
-  order: a two-paragraph overview (stack, database engine and why, deployment), a link to this spec with the
-  spec version the app follows, **Branches**, **Commands** (including how to run a single test file),
+  order: a two-paragraph overview (stack, database engine and why, deployment), a link to the pinned spec copy
+  `docs/agt-webapp-spec.md` with the spec version and source tag it follows (SPEC-2), **Branches**, **Commands** (including how to run a single test file),
   **Where things live** (path → purpose table), **Conventions and gotchas**, and **Deviations from the AGT
   web app spec** (rule ID, what differs, why; "None" if empty). Keep it short and current; update it in the
   same PR as the code it describes.
@@ -1444,7 +1467,7 @@ higher level.
 - **WF-3** One concern per PR. Code, tests, translations, README/AGENTS.md and `config.example.yaml` change
   together.
 - **WF-4** Never weaken a security rule (§10, §11, AUTH-*) to make something work. If a rule blocks a real
-  need, stop and propose a spec change.
+  need, stop and propose a spec change (a PR to the spec repository, SPEC-4).
 - **WF-5** Before you finish: `npm run check` passes; new strings are translated into all locales; new
   routes have full schemas and appear in `/api/openapi.json`; new config keys are in the schema,
   `config.example.yaml` and the README tables; new tables have a migration; the version is bumped as §21 requires
@@ -1476,22 +1499,7 @@ Use this list to review a new app or a large change. Every item must be true or 
 - [ ] All 10 locales complete for public and admin strings; no hard-coded UI text.
 - [ ] Docker Compose and systemd installs documented and working; healthcheck; non-root; hardened.
 - [ ] README sections per DOC-1; AGENTS.md per DOC-2 with deviations.
+- [ ] `docs/agt-webapp-spec.md` is an unmodified copy of a tagged spec release, and `AGENTS.md` names its version
+      and tag (SPEC-2).
 - [ ] SemVer version in `package.json`, bumped in each PR (§21); `CHANGELOG.md` with upgrade notes for majors;
       deprecations before removals; releases tagged `vX.Y.Z` with GitHub Releases; installs check out tags.
-
-## Appendix A: Reference implementation deviations
-
-The AGT Event Calendar predates this spec and was brought into compliance afterwards. The deviations below are
-also listed in its `AGENTS.md`. Unless a row says "to fix", they are kept on purpose. **Do not copy them into
-other apps.**
-
-| Rule | Calendar today | Why |
-| --- | --- | --- |
-| NAME-2, CFG-2 | Env vars `AGT_SETUP_PASSWORD`, `AGT_CONFIG_FILE`, `AGT_STATIC_DIR` (no app segment); cookie `agt_session`; Compose service `calendar`, volume `calendar-data`; SQLite file `agt-calendar.sqlite` | Renaming would break existing `.env` files, sign everyone out and orphan the data volume. New apps use the spec names. |
-| CFG-5 | Backup/import limits live under `migration.*` | Operators may have them in `config.yaml`, and unknown keys stop the server. |
-| STACK-1 | Extra runtime dependency `papaparse` | Parses the legacy CSVs for Migrate from Amplify. |
-| §21 (VER-2, VER-9, VER-11, VER-13) | No `CHANGELOG.md` and no release tags yet; the admin dashboard doesn't show the version; the README installs and upgrades from `main` | **Not kept: to fix.** Added in spec 3.0.0. |
-
-Calendar-specific features that are **not** part of the standard: Migrate from Amplify (`server/migration.ts`,
-`src/lib/csv.ts`), legacy 4-hex event IDs, bookmarks, the national holidays and change log content types, the
-anthem audio and the portal glyph tool link. They are examples of app-specific features, not templates.

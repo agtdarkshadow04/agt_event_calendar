@@ -379,7 +379,7 @@ npm run dev          # Vite dev server with hot reload; proxies /api to port 808
 
 For local development, start the API with a setup password, for example `AGT_SETUP_PASSWORD=dev-setup-password npm run dev:server`.
 
-The app follows the [AGT Web Application Specification](docs/agt-webapp-spec.md); [`AGENTS.md`](AGENTS.md) is the guide for AI coding agents and lists where the app deviates from the spec.
+The app follows the [AGT Web Application Specification](docs/agt-webapp-spec.md) v4.0.0, a pinned copy from [`agtdarkshadow04/agt_webapp_specification`](https://github.com/agtdarkshadow04/agt_webapp_specification); [`AGENTS.md`](AGENTS.md) is the guide for AI coding agents and lists where the app deviates from the spec.
 
 **API:** the REST API is described by an OpenAPI 3.1 document generated from the route schemas and served at `/api/openapi.json`. Admin routes need the session cookie from `POST /api/admin/login`; state-changing admin, setup and login requests also need the header `x-agt-request: 1`.
 
@@ -396,7 +396,7 @@ Project layout:
 | --- | --- |
 | `server/` | Fastify server: config, SQLite migrations (`server/migrations/*.sql`), auth, routes, OpenAPI (`openapi.ts`, `schemas.ts`), Migrate from Amplify, backup & restore |
 | `deploy/` | systemd unit and Caddy example for local installations |
-| `docs/agt-webapp-spec.md` | The AGT Web Application Specification |
+| `docs/agt-webapp-spec.md` | Pinned copy of the AGT Web Application Specification (don't edit; changes go to the spec repository) |
 | `server/test/` | Server tests and the reference migration fixture (`fixtures/amplify-migration/`) |
 | `src/` | Public calendar (React) |
 | `src/admin/` | Admin dashboard (separate Vite entry, `admin.html`) |
