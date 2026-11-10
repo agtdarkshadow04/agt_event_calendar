@@ -69,10 +69,10 @@ The app runs as a hardened systemd service under its own system user. Paths:
 | `/etc/agt-event-calendar/.env` | Secrets and bootstrap values (`AGT_SETUP_PASSWORD`), readable only by root |
 | `/var/lib/agt-event-calendar` | Database, uploaded images and automatic pre-restore backups (created by systemd) |
 
-1. Install Node.js 24 from NodeSource, plus Git and the build tools for the SQLite driver:
+1. Install Node.js 26 from NodeSource, plus Git and the build tools for the SQLite driver:
 
    ```bash
-   curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource_setup.sh
+   curl -fsSL https://deb.nodesource.com/setup_26.x -o /tmp/nodesource_setup.sh
    sudo -E bash /tmp/nodesource_setup.sh
    sudo apt-get install -y nodejs git build-essential python3
    ```
@@ -407,7 +407,7 @@ The goal: content from submissions, dashboard edits, migrated files or restored 
 
 ## Development
 
-Requirements: Node.js 24.
+Requirements: Node.js 26 LTS with npm 11.20 or newer (npm 11).
 
 ```bash
 npm ci

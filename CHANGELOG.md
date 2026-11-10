@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
 [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html), as described in §21 of the
 [AGT Web Application Specification](docs/agt-webapp-spec.md).
 
+## [3.0.0] - Unreleased
+
+### Upgrade notes
+
+- **Local installations need Node.js 26 and npm 11.20 or newer (npm 11).** Before checking out this release, install
+  Node.js 26 from NodeSource (`curl -fsSL https://deb.nodesource.com/setup_26.x -o /tmp/nodesource_setup.sh`, then
+  `sudo -E bash /tmp/nodesource_setup.sh && sudo apt-get install -y nodejs`), and check with `node -v` and `npm -v`.
+  `npm ci` now stops with an engine error on older versions. Docker Compose installations need no action: the image
+  is now built from `node:26-bookworm-slim`
+  ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
+
+### Added
+
+- A GitHub Actions workflow runs `npm ci`, checks that every dependency install script is approved or denied, and runs
+  `npm run check` on every pull request and push to `main`
+  ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
+- `package.json` approves the install scripts of `better-sqlite3` and `esbuild` in `allowScripts`, so `npm ci` behaves
+  the same with npm 11.20 and newer ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
+
+### Changed
+
+- Node.js 26 LTS and npm 11.20+ are required (`engines` `node >=26.0.0 <27`, `npm >=11.20.0 <12`, enforced by
+  `engine-strict=true` in `.npmrc`); the Docker image and the server bundle target Node.js 26
+  ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
+- Build tools: TypeScript 7.0, Vite 8.3, `@vitejs/plugin-react` 6.3 and esbuild 0.28
+  ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
+
 ## [2.2.0] - 2026-11-10
 
 ### Added

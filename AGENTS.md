@@ -1,6 +1,6 @@
 # Agent guide — AGT Event Calendar
 
-A **Fastify** server (`server/`, Node 24, TypeScript) owns a **SQLite** database (`better-sqlite3`) and serves a
+A **Fastify** server (`server/`, Node 26, TypeScript) owns a **SQLite** database (`better-sqlite3`) and serves a
 React 19 + Vite SPA (`src/`) plus a separate admin dashboard entry (`admin.html` → `src/admin/`). The REST API is
 described by an OpenAPI 3.1 document generated from the TypeBox route schemas (`/api/openapi.json`). No router or
 state library. No cloud services, no CDNs, and no outbound requests from the server. User prefs and bookmarks live
@@ -47,6 +47,7 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 
 | Path | Purpose |
 | --- | --- |
+| `.github/workflows/ci.yml` | CI: `npm ci`, install-script check (STACK-7) and `npm run check` on every PR and push to `main` |
 | `CHANGELOG.md` | Release notes (Keep a Changelog 1.1.0), newest first; `server/test/version.test.ts` checks it against `package.json` |
 | `server/index.ts` | Entry point: loads `config.yaml` (`AGT_CONFIG_FILE`), opens the DB, reads `AGT_SETUP_PASSWORD`, listens |
 | `server/app.ts` | `buildApp()`: security headers/CSP, error handling, public API, submissions, setup, login, static SPA |
@@ -105,6 +106,10 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
   `globalThis.window` as `bookmarks.test.ts` does. Server tests use `createTestServer()` from
   `server/test/helpers.ts` (temp data dir, cheap captcha). Put new logic in `src/lib/` or `server/` with tests.
 - Times are stored/validated as UTC; the UI shows and accepts the user's chosen time zone (`settings.ts`, `datetime.ts`).
+- **Node.js 26 and npm 11.20+ only** (`engines`, `engine-strict=true` in `.npmrc`). npm skips dependency install
+  scripts not listed in `allowScripts`: after adding or upgrading a dependency that has one, run
+  `npm install-scripts approve|deny <pkg>` so that `npm install-scripts ls` lists nothing (CI fails otherwise).
+  Approving a new script needs a reason in the PR (STACK-7).
 - TypeScript is `strict` with `noUnusedLocals`/`noUnusedParameters`; lint fails on unused symbols.
 - Accessibility matters: modals manage focus (`useDialog`), icon buttons need `aria-label`s (from translations).
 - **API routes:** every `/api/` route declares TypeBox schemas (`params`, `querystring`, `body`, every success
