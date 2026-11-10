@@ -8,7 +8,7 @@ import { EVENT_STATUSES, isUuidV4, validateChangeLogInput, validateEventInput, v
 import type { EventStatus } from '../src/lib/validation';
 import { changedFields, setAudit } from './audit';
 import { CSRF_HEADER, endSession, hasValidSession, requireCsrfHeader, startSession } from './session';
-import { createBackup, discardBackup, previewRestore, restoreBackup } from './backup';
+import { discardBackup, downloadBackup, previewRestore, restoreBackup } from './backup';
 import { EDITABLE_SETTINGS, SETTING_KEYS } from './config';
 import type { SettingKey } from './config';
 import type { AppContext } from './context';
@@ -84,6 +84,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   // ------------------------------------------------------------- account
 
   app.get('/api/admin/session', {
+    config: { writesData: false },
     schema: {
       ...read('getSession', ['admin'], 'Returns the signed-in admin, whether the setup password is still set, and the app version.'),
       response: { 200: SessionSchema, ...errorResponses },
@@ -104,7 +105,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       }, { additionalProperties: false }),
       response: { 200: OkSchema, ...errorResponses },
     },
-    config: { rateLimit: { max: context.config.rateLimits.login.max, timeWindow: context.config.rateLimits.login.windowMinutes * 60_000 } },
+    config: { writesData: true, rateLimit: { max: context.config.rateLimits.login.max, timeWindow: context.config.rateLimits.login.windowMinutes * 60_000 } },
   }, async (request, reply) => {
     const admin = getAdmin(context.db);
     if (!admin || !(await checkAdminPassword(request.log, request.body.currentPassword, admin.password_hash))) {
@@ -125,6 +126,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   // ------------------------------------------------------------- events
 
   app.get('/api/admin/events', {
+    config: { writesData: false },
     schema: {
       ...read('listAdminEvents', ['events'], 'Lists all events, optionally filtered by status.'),
       querystring: Type.Object({ status: Type.Optional(EventStatusSchema) }, { additionalProperties: false }),
@@ -133,6 +135,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   }, async (request) => listEvents(context.db, request.query.status ? [request.query.status] : undefined));
 
   app.get('/api/admin/events/:id', {
+    config: { writesData: false },
     schema: {
       ...read('getAdminEvent', ['events'], 'Returns any event, whatever its status.'),
       params: IdParams,
@@ -141,6 +144,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   }, async (request) => getEvent(context.db, checkUuid(request.params.id, 'Event')) ?? notFound('Event'));
 
   app.post('/api/admin/events', {
+    config: { writesData: true },
     schema: {
       ...write('createAdminEvent', ['events'], 'Creates an event (unpublished unless a status is given).'),
       body: AdminEventInputSchema,
@@ -157,6 +161,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   });
 
   app.put('/api/admin/events/:id', {
+    config: { writesData: true },
     schema: {
       ...write('updateAdminEvent', ['events'], 'Replaces an event; the status changes only when given.'),
       params: IdParams,
@@ -179,6 +184,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   });
 
   app.post('/api/admin/events/:id/status', {
+    config: { writesData: true },
     schema: {
       ...write('setAdminEventStatus', ['events'], 'Publishes, unpublishes, approves or rejects an event.'),
       params: IdParams,
@@ -194,6 +200,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   });
 
   app.delete('/api/admin/events/:id', {
+    config: { writesData: true },
     schema: {
       ...write('deleteAdminEvent', ['events'], 'Deletes an event.'),
       params: IdParams,
@@ -210,6 +217,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   // ------------------------------------------------------------- images
 
   app.get('/api/admin/images', {
+    config: { writesData: false },
     schema: {
       ...read('listAdminImages', ['images'], 'Lists uploaded images with the events that use them.'),
       response: { 200: Type.Array(AdminImageSchema), ...errorResponses },
@@ -233,7 +241,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   };
 
   app.post('/api/admin/images', {
-    config: uploadConfig,
+    config: { ...uploadConfig, writesData: true },
     schema: {
       ...write('uploadAdminImage', ['images'], 'Uploads an image, checked by its contents.'),
       response: { 201: ImageResultSchema, ...errorResponses },
@@ -251,7 +259,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   });
 
   app.put('/api/admin/images/:id', {
-    config: uploadConfig,
+    config: { ...uploadConfig, writesData: true },
     schema: {
       ...write('replaceAdminImage', ['images'], 'Replaces the file of an image, keeping its ID.'),
       params: IdParams,
@@ -281,6 +289,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   });
 
   app.delete('/api/admin/images/:id', {
+    config: { writesData: true },
     schema: {
       ...write('deleteAdminImage', ['images'], 'Deletes an image; events using it lose their cover.'),
       params: IdParams,
@@ -294,6 +303,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   });
 
   app.post('/api/admin/images/cleanup', {
+    config: { writesData: true },
     schema: {
       ...write('cleanUpAdminImages', ['images'], 'Deletes every image that no event uses.'),
       response: { 200: Type.Object({ removed: Type.Integer() }), ...errorResponses },
@@ -315,6 +325,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   // ------------------------------------------------------------- national holidays
 
   app.get('/api/admin/holidays', {
+    config: { writesData: false },
     schema: {
       ...read('listAdminHolidays', ['holidays'], 'Lists all national holidays.'),
       response: { 200: Type.Array(AdminApiHolidaySchema), ...errorResponses },
@@ -322,6 +333,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   }, async () => listHolidays(context.db, false));
 
   app.post('/api/admin/holidays', {
+    config: { writesData: true },
     schema: {
       ...write('createAdminHoliday', ['holidays'], 'Creates a national holiday (published unless stated otherwise).'),
       body: HolidayInputSchema,
@@ -337,6 +349,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   });
 
   app.put('/api/admin/holidays/:id', {
+    config: { writesData: true },
     schema: {
       ...write('updateAdminHoliday', ['holidays'], 'Replaces a national holiday.'),
       params: IdParams,
@@ -355,6 +368,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   });
 
   app.delete('/api/admin/holidays/:id', {
+    config: { writesData: true },
     schema: {
       ...write('deleteAdminHoliday', ['holidays'], 'Deletes a national holiday.'),
       params: IdParams,
@@ -371,6 +385,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   // ------------------------------------------------------------- change log
 
   app.get('/api/admin/changelog', {
+    config: { writesData: false },
     schema: {
       ...read('listAdminChangeLog', ['changelog'], 'Lists all change-log entries, newest first.'),
       response: { 200: Type.Array(AdminApiChangeLogEntrySchema), ...errorResponses },
@@ -378,6 +393,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   }, async () => listChangeLog(context.db, false));
 
   app.post('/api/admin/changelog', {
+    config: { writesData: true },
     schema: {
       ...write('createAdminChangeLogEntry', ['changelog'], 'Creates a change-log entry (published unless stated otherwise).'),
       body: ChangeLogInputSchema,
@@ -393,6 +409,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   });
 
   app.put('/api/admin/changelog/:id', {
+    config: { writesData: true },
     schema: {
       ...write('updateAdminChangeLogEntry', ['changelog'], 'Replaces a change-log entry.'),
       params: IdParams,
@@ -411,6 +428,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   });
 
   app.delete('/api/admin/changelog/:id', {
+    config: { writesData: true },
     schema: {
       ...write('deleteAdminChangeLogEntry', ['changelog'], 'Deletes a change-log entry.'),
       params: IdParams,
@@ -427,6 +445,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   // ------------------------------------------------------------- settings
 
   app.get('/api/admin/settings', {
+    config: { writesData: false },
     schema: {
       ...read('listSettings', ['admin'], 'Lists dashboard settings with their effective value and source.'),
       response: { 200: Type.Array(SettingStateSchema), ...errorResponses },
@@ -439,6 +458,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
    * always wins and is enforced here, not only in the UI.
    */
   app.put('/api/admin/settings', {
+    config: { writesData: true },
     schema: {
       ...write('updateSettings', ['admin'],
         'Changes dashboard settings. Keys defined in config.yaml are rejected with 409 defined_in_config.'),
@@ -480,7 +500,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   // ------------------------------------------------------------- Migrate from Amplify
 
   app.post('/api/admin/migrate', {
-    config: { multipartBody: MigrationFormSchema },
+    config: { writesData: true, multipartBody: MigrationFormSchema },
     schema: {
       ...write('migrateFromAmplify', ['backup'], 'Previews or imports a Migrate from Amplify ZIP.'),
       response: { 200: MigrationReportSchema, ...errorResponses },
@@ -528,13 +548,13 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   // ------------------------------------------------------------- backup & restore
 
   app.get('/api/admin/backup', {
-    config: { audit: true },
+    config: { writesData: false, audit: true },
     schema: {
       ...read('downloadBackup', ['backup'], 'Downloads a backup ZIP (database, uploads, config.yaml, manifest).'),
       response: { 200: binaryResponse('The backup ZIP.', ['application/zip']), ...errorResponses },
     },
   }, async (request, reply) => {
-    const backup = await createBackup(context);
+    const backup = await downloadBackup(context);
     const stream = createReadStream(backup.path);
     stream.on('close', () => discardBackup(backup.path));
     setAudit(request, { targetType: 'backup', details: { fileName: backup.fileName, sizeBytes: statSync(backup.path).size } });
@@ -545,7 +565,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
   });
 
   app.post('/api/admin/restore', {
-    config: { multipartBody: RestoreFormSchema },
+    config: { writesData: false, multipartBody: RestoreFormSchema },
     schema: {
       ...write('restoreBackup', ['backup'],
         'Previews or restores a backup. A restore replaces all data and the admin account, and ends every session.'),
@@ -563,7 +583,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       const action = form.fields.action ?? 'preview';
       if (action !== 'preview' && action !== 'restore') throw new HttpError(400, 'invalid_request', 'action must be preview or restore.');
       setAudit(request, { targetType: 'backup', details: { action, fileSizeBytes: statSync(file.path).size } });
-      const report = action === 'preview' ? await previewRestore(context, file.path) : await restoreBackup(context, file.path);
+      const report = action === 'preview' ? await previewRestore(context, file.path) : await restoreBackup(context, file.path, { ownActivity: 1 });
       setAudit(request, {
         details: {
           backupCreatedAt: report.createdAt,

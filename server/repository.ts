@@ -3,6 +3,7 @@ import type { AdminApiChangeLogEntry, AdminApiEvent, AdminApiHoliday } from '../
 import type { ChangeLogInput, EventInput, EventStatus, HolidayInput } from '../src/lib/validation';
 import type { Db } from './db';
 import type { ImageRecord } from './images';
+import { assertDataWrite } from './dataWrite';
 
 const now = () => new Date().toISOString();
 
@@ -97,6 +98,7 @@ export function insertEvent(
   input: EventInput,
   options: { status: EventStatus; legacyId?: string | null; coverImageId?: string | null; submitterAgtUsername?: string | null },
 ): string {
+  assertDataWrite('insertEvent()');
   const id = randomUUID();
   const timestamp = now();
   db.prepare(`INSERT INTO events (
@@ -112,6 +114,7 @@ export function insertEvent(
 }
 
 export function updateEvent(db: Db, id: string, input: EventInput, coverImageId: string | null): boolean {
+  assertDataWrite('updateEvent()');
   const result = db.prepare(`UPDATE events SET
       name = ?, start_utc = ?, end_utc = ?, civilization = ?, type = ?, description_md = ?, cover_image_id = ?,
       galaxy = ?, region = ?, system = ?, planet = ?, portal_code = ?, updated_at = ?
@@ -125,10 +128,12 @@ export function updateEvent(db: Db, id: string, input: EventInput, coverImageId:
 }
 
 export function setEventStatus(db: Db, id: string, status: EventStatus): boolean {
+  assertDataWrite('setEventStatus()');
   return db.prepare('UPDATE events SET status = ?, updated_at = ? WHERE id = ?').run(status, now(), id).changes > 0;
 }
 
 export function deleteEvent(db: Db, id: string): boolean {
+  assertDataWrite('deleteEvent()');
   return db.prepare('DELETE FROM events WHERE id = ?').run(id).changes > 0;
 }
 
@@ -158,6 +163,7 @@ export function holidayExists(db: Db, input: HolidayInput): boolean {
 }
 
 export function insertHoliday(db: Db, input: HolidayInput, published: boolean): string {
+  assertDataWrite('insertHoliday()');
   const id = randomUUID();
   const timestamp = now();
   db.prepare(`INSERT INTO national_holidays (id, name, civilization, date, type, published, created_at, updated_at)
@@ -166,11 +172,13 @@ export function insertHoliday(db: Db, input: HolidayInput, published: boolean): 
 }
 
 export function updateHoliday(db: Db, id: string, input: HolidayInput, published: boolean): boolean {
+  assertDataWrite('updateHoliday()');
   return db.prepare(`UPDATE national_holidays SET name = ?, civilization = ?, date = ?, type = ?, published = ?, updated_at = ?
     WHERE id = ?`).run(input.name, input.civilization, input.date, input.type, published ? 1 : 0, now(), id).changes > 0;
 }
 
 export function deleteHoliday(db: Db, id: string): boolean {
+  assertDataWrite('deleteHoliday()');
   return db.prepare('DELETE FROM national_holidays WHERE id = ?').run(id).changes > 0;
 }
 
@@ -194,6 +202,7 @@ export function getChangeLog(db: Db, id: string): AdminApiChangeLogEntry | null 
 }
 
 export function insertChangeLog(db: Db, input: ChangeLogInput, published: boolean): string {
+  assertDataWrite('insertChangeLog()');
   const id = randomUUID();
   const timestamp = now();
   db.prepare('INSERT INTO changelog (id, date, changes, published, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
@@ -202,11 +211,13 @@ export function insertChangeLog(db: Db, input: ChangeLogInput, published: boolea
 }
 
 export function updateChangeLog(db: Db, id: string, input: ChangeLogInput, published: boolean): boolean {
+  assertDataWrite('updateChangeLog()');
   return db.prepare('UPDATE changelog SET date = ?, changes = ?, published = ?, updated_at = ? WHERE id = ?')
     .run(input.date, input.changes, published ? 1 : 0, now(), id).changes > 0;
 }
 
 export function deleteChangeLog(db: Db, id: string): boolean {
+  assertDataWrite('deleteChangeLog()');
   return db.prepare('DELETE FROM changelog WHERE id = ?').run(id).changes > 0;
 }
 
@@ -222,6 +233,7 @@ const toImage = (row: ImageRow): ImageRecord => ({
 });
 
 export function insertImage(db: Db, image: ImageRecord): void {
+  assertDataWrite('insertImage()');
   db.prepare('INSERT INTO images (id, file_name, mime_type, size_bytes, sha256, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .run(image.id, image.fileName, image.mimeType, image.sizeBytes, image.sha256, image.createdAt, image.updatedAt);
 }
@@ -243,11 +255,13 @@ export function listImages(db: Db): (ImageRecord & { referencedBy: { id: string;
 
 /** Points an image row at a new file (used when an admin replaces an image). */
 export function replaceImageRow(db: Db, id: string, replacement: ImageRecord): void {
+  assertDataWrite('replaceImageRow()');
   db.prepare('UPDATE images SET file_name = ?, mime_type = ?, size_bytes = ?, sha256 = ?, updated_at = ? WHERE id = ?')
     .run(replacement.fileName, replacement.mimeType, replacement.sizeBytes, replacement.sha256, replacement.updatedAt, id);
 }
 
 export function deleteImageRow(db: Db, id: string): ImageRecord | null {
+  assertDataWrite('deleteImageRow()');
   const image = getImage(db, id);
   if (!image) return null;
   db.prepare('DELETE FROM images WHERE id = ?').run(id);
@@ -276,6 +290,7 @@ export function getSettingRows(db: Db): Map<string, unknown> {
 }
 
 export function setSetting(db: Db, key: string, value: unknown): void {
+  assertDataWrite('setSetting()');
   const timestamp = now();
   db.prepare(`INSERT INTO settings (key, value, created_at, updated_at) VALUES (?, ?, ?, ?)
     ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
@@ -283,6 +298,7 @@ export function setSetting(db: Db, key: string, value: unknown): void {
 }
 
 export function deleteSetting(db: Db, key: string): void {
+  assertDataWrite('deleteSetting()');
   db.prepare('DELETE FROM settings WHERE key = ?').run(key);
 }
 
@@ -296,12 +312,14 @@ export function getAdmin(db: Db): AdminRow | null {
 
 /** Creates the single admin account. Returns false if one already exists. */
 export function createAdmin(db: Db, username: string, passwordHash: string): boolean {
+  assertDataWrite('createAdmin()');
   const timestamp = now();
   return db.prepare(`INSERT OR IGNORE INTO admin (id, username, password_hash, created_at, updated_at)
     VALUES (1, ?, ?, ?, ?)`).run(username, passwordHash, timestamp, timestamp).changes > 0;
 }
 
 export function updateAdminPassword(db: Db, passwordHash: string): void {
+  assertDataWrite('updateAdminPassword()');
   db.prepare('UPDATE admin SET password_hash = ?, updated_at = ? WHERE id = 1').run(passwordHash, now());
 }
 
@@ -330,6 +348,7 @@ export function deleteAllSessions(db: Db): void {
 
 /** Stores a generated secret unless one with this name exists. Called at startup and after a restore only (SEC-8). */
 export function createSecretIfMissing(db: Db, name: string, create: () => string): boolean {
+  assertDataWrite('createSecretIfMissing()');
   if (getSecret(db, name) !== null) return false;
   const timestamp = now();
   return db.prepare('INSERT OR IGNORE INTO app_secrets (name, value, created_at, updated_at) VALUES (?, ?, ?, ?)')
@@ -342,6 +361,7 @@ export function getSecret(db: Db, name: string): string | null {
 
 /** Atomically marks an ALTCHA challenge as used. Returns false if it already was. */
 export function markAltchaUsed(db: Db, challengeId: string, ttlSeconds: number): boolean {
+  assertDataWrite('markAltchaUsed()');
   const nowSeconds = Math.floor(Date.now() / 1000);
   db.prepare('DELETE FROM altcha_used WHERE expires_at < ?').run(nowSeconds);
   return db.prepare('INSERT OR IGNORE INTO altcha_used (challenge_id, expires_at) VALUES (?, ?)')

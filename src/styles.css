@@ -349,6 +349,20 @@ summary:focus-visible {
   flex: 1;
 }
 
+/* Non-blocking "Maintenance in progress" notice while the server answers 503 maintenance (FE-5). */
+.maintenance-notice {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 0.65rem clamp(0.75rem, 4vw, 3rem);
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--agt-orange);
+  background: var(--surface-raised);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
 .intro {
   max-width: 58rem;
   margin-bottom: 2rem;

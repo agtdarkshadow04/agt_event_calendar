@@ -63,7 +63,8 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 | `server/repository.ts` | All SQL queries |
 | `server/images.ts` | Image checks by magic bytes (PNG/JPEG/WebP/GIF, no SVG, ≤ 10 MB) and storage |
 | `server/migration.ts`, `server/zip.ts` | Migrate from Amplify (ZIP import) and safe ZIP reading |
-| `server/backup.ts` | Backup export / restore (never writes `config.yaml`) |
+| `server/backup.ts` | Backup export / restore (never writes `config.yaml`); manifest checks (`parseManifest`) |
+| `server/dataWrite.ts` | Operation lock (`idle`/`backup`/`restore`/`restore_failed`), `withDataWrite()`, `503 maintenance`, job runner |
 | `server/altcha.ts`, `server/passwords.ts`, `server/session.ts` | Captcha, scrypt hashes, cookie sessions |
 | `server/test/` | `node:test` + Fastify `inject()`; `helpers.ts`; `fixtures/amplify-migration/` is the reference ZIP |
 | `src/App.tsx` | Calendar root: API loading, filters, modals, bookmarks, `?event_id=` deep links (legacy IDs → UUID) |
@@ -120,6 +121,11 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 - **Admin CRUD responses:** create → `201 { <resource>, notices }`, replace → `200 { <resource>, notices }`,
   delete → `204` with no body. A breaking API change bumps the major version in `package.json`.
 - **Portal codes** are shown with `<PortalGlyphs>` next to the hex text; never use the glyph font for other text.
+- **Data writes (BAK-8):** every `/api/` route declares `config: { writesData: true | false }` (registration throws
+  otherwise) and every job runs through `context.operation.runJob({ name, writesData }, fn)`. `writesData: true` means it
+  changes the main database or `uploads/`; session rows and the log store are not data. Writing functions in
+  `repository.ts` and `images.ts` call `assertDataWrite()` and throw outside `withDataWrite()`, so add that call to any
+  new one. Startup and restore write as the operation owner (`asOperationOwner()`); tests that seed data directly do too.
 - **Logging:** user actions go to the audit log, never `request.log.info`. Handlers describe the change with
   `setAudit(request, { targetType, targetId, actor?, details })` (`server/audit.ts`); the `onResponse` hook audits every
   non-GET `/api/` route, every GET route with `config: { audit: true }` (downloads, exports) and every 401/403/429.

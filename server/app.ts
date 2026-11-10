@@ -17,6 +17,7 @@ import { auditFailure, registerAudit, setAudit } from './audit';
 import { createAltchaChallenge, ensureAltchaKey, verifyAltchaPayload } from './altcha';
 import type { AppContext } from './context';
 import { setting } from './context';
+import { asOperationOwner, registerOperationLock } from './dataWrite';
 import { HttpError, isLoopbackAddress, readMultipart } from './http';
 import { createLogger, scheduleRetention } from './logs';
 import { SECURITY, errorResponses, registerOpenApi } from './openapi';
@@ -107,7 +108,7 @@ const rateLimit = (max: number | ((request: FastifyRequest) => number), windowMi
 
 export async function buildApp(context: AppContext, options: BuildOptions = {}): Promise<FastifyInstance> {
   // Generated secrets are created at startup, never by a request (ALT-2, SEC-8).
-  ensureAltchaKey(context.db);
+  asOperationOwner(() => ensureAltchaKey(context.db));
   const app = Fastify({
     loggerInstance: options.logger ?? createLogger(context.logs, 'silent', null),
     // Access logs describe user activity, which the audit log covers (LOG-6).
@@ -118,6 +119,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     bodyLimit: 2 * 1024 * 1024,
   }).withTypeProvider<TypeBoxTypeProvider>();
 
+  registerOperationLock(app, context.operation);
   await registerOpenApi(app, context.version);
   await app.register(fastifyCookie);
   registerAudit(app, context);
@@ -150,7 +152,9 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
   app.setErrorHandler((error: Error & { statusCode?: number; code?: string; validation?: unknown }, request, reply) => {
     if (error instanceof HttpError) {
       auditFailure(request, error.code, error.fields);
-      return reply.status(error.statusCode).send({ error: error.code, message: error.message, fields: error.fields });
+      const retryAfter = error.params?.retryAfterSeconds;
+      if (typeof retryAfter === 'number') reply.header('Retry-After', String(retryAfter));
+      return reply.status(error.statusCode).send({ error: error.code, message: error.message, fields: error.fields, params: error.params });
     }
     if (error instanceof ImageRejectedError) {
       auditFailure(request, 'image_rejected');
@@ -190,17 +194,27 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
   // ------------------------------------------------------------- public API
 
   app.get('/api/health', {
+    config: { writesData: false },
     schema: {
       operationId: 'getHealth', tags: ['public'], summary: 'Checks that the server and database respond.',
       security: SECURITY.public,
-      response: { 200: Type.Object({ status: Type.Literal('ok') }), ...errorResponses },
+      response: {
+        200: Type.Object({
+          status: Type.Union([Type.Literal('ok'), Type.Literal('maintenance')], {
+            description: '`maintenance` while a restore runs (SRV-11); the database is not queried then.',
+          }),
+        }),
+        ...errorResponses,
+      },
     },
   }, async () => {
+    if (context.operation.maintenance) return { status: 'maintenance' as const };
     context.db.prepare('SELECT 1').get();
     return { status: 'ok' as const };
   });
 
   app.get('/api/settings/public', {
+    config: { writesData: false },
     schema: {
       operationId: 'getPublicSettings', tags: ['public'], summary: 'Returns the settings the public calendar needs.',
       security: SECURITY.public,
@@ -209,6 +223,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
   }, async () => publicSettings(context));
 
   app.get('/api/events', {
+    config: { writesData: false },
     schema: {
       operationId: 'listEvents', tags: ['public'], summary: 'Lists published events.',
       security: SECURITY.public,
@@ -218,6 +233,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     listEvents(context.db, ['published']).map(toPublicEvent));
 
   app.get('/api/events/:id', {
+    config: { writesData: false },
     schema: {
       operationId: 'getEvent', tags: ['public'],
       summary: 'Returns a published event by UUID or by its legacy 4-hex ID.',
@@ -233,6 +249,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
   });
 
   app.get('/api/holidays', {
+    config: { writesData: false },
     schema: {
       operationId: 'listHolidays', tags: ['public'], summary: 'Lists published national holidays.',
       security: SECURITY.public,
@@ -242,6 +259,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     listHolidays(context.db, true).map(({ published: _published, ...holiday }) => holiday));
 
   app.get('/api/changelog', {
+    config: { writesData: false },
     schema: {
       operationId: 'listChangeLog', tags: ['public'], summary: 'Lists published change-log entries, newest first.',
       security: SECURITY.public,
@@ -251,6 +269,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
     listChangeLog(context.db, true).map(({ published: _published, ...entry }) => entry));
 
   app.get('/api/images/:id', {
+    config: { writesData: false },
     schema: {
       operationId: 'getImage', tags: ['images'],
       summary: 'Returns an uploaded image. Images of unpublished events are visible only to the admin.',
@@ -287,7 +306,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
   };
 
   app.get('/api/altcha/challenge', {
-    config: rateLimit(60, 1),
+    config: { ...rateLimit(60, 1), writesData: false },
     schema: {
       operationId: 'getAltchaChallenge', tags: ['submissions'], summary: 'Issues an ALTCHA proof-of-work challenge.',
       security: SECURITY.public,
@@ -300,6 +319,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
 
   app.post('/api/submissions', {
     config: {
+      writesData: true,
       ...rateLimit(
         () => setting(context, 'submissions.rateLimit.max'),
         () => setting(context, 'submissions.rateLimit.windowMinutes'),
@@ -377,6 +397,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
   };
 
   app.get('/api/setup/status', {
+    config: { writesData: false },
     schema: {
       operationId: 'getSetupStatus', tags: ['auth'],
       summary: 'Tells whether the admin account exists and whether first-run setup is possible.',
@@ -389,7 +410,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
   }));
 
   app.post('/api/setup', {
-    config: rateLimit(context.config.rateLimits.setup.max, context.config.rateLimits.setup.windowMinutes),
+    config: { ...rateLimit(context.config.rateLimits.setup.max, context.config.rateLimits.setup.windowMinutes), writesData: true },
     schema: {
       operationId: 'setupAdmin', tags: ['auth'],
       summary: 'First-run setup: creates the single admin account with the setup password from the environment.',
@@ -438,7 +459,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
 
   const dummyHash = await hashPassword(randomBytes(16).toString('hex'));
   app.post('/api/admin/login', {
-    config: rateLimit(context.config.rateLimits.login.max, context.config.rateLimits.login.windowMinutes),
+    config: { ...rateLimit(context.config.rateLimits.login.max, context.config.rateLimits.login.windowMinutes), writesData: false },
     schema: {
       operationId: 'login', tags: ['auth'], summary: 'Signs the admin in and sets the session cookie.',
       security: SECURITY.csrf,
@@ -463,6 +484,7 @@ export async function buildApp(context: AppContext, options: BuildOptions = {}):
   });
 
   app.post('/api/admin/logout', {
+    config: { writesData: false },
     schema: {
       operationId: 'logout', tags: ['auth'], summary: 'Ends the current admin session.',
       security: SECURITY.csrf,

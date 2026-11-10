@@ -88,5 +88,5 @@ export async function registerOpenApi(app: FastifyInstance, version: string): Pr
     },
   });
 
-  app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
+  app.get('/api/openapi.json', { config: { writesData: false }, schema: { hide: true } }, async () => app.swagger());
 }

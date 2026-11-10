@@ -8,6 +8,7 @@ import Database from 'better-sqlite3';
 import { outcomeFor } from '../audit';
 import { parseConfigText, resolveConfig } from '../config';
 import type { AppContext } from '../context';
+import { OperationLock } from '../dataWrite';
 import { MIGRATIONS, openDatabase } from '../db';
 import type { Migration } from '../db';
 import { LOG_MIGRATIONS, LogStore, createLogger, csvCell, normalizeIp, runRetention } from '../logs';
@@ -290,7 +291,7 @@ describe('server log', () => {
     const config = resolveConfig(parseConfigText(''), null, path.join(dir, 'config.yaml'), dir);
     const logs = LogStore.open(config.logDatabaseFile, (migration) => logMigrations.push(migration));
     const db = openDatabase(config.databaseFile, { onMigration: (migration) => migrations.push(migration) });
-    const context: AppContext = { config, db, logs, setupPassword: null, version: '9.9.9' };
+    const context: AppContext = { config, db, logs, setupPassword: null, version: '9.9.9', operation: new OperationLock() };
     let stdout = '';
     const sink = new Writable({ write(chunk, _encoding, done) { stdout += String(chunk); done(); } });
     try {
@@ -323,7 +324,7 @@ describe('server log', () => {
 
   it('stores no access logs, and links a 500 to its audit entry by request ID', async () => {
     const test = await server();
-    test.app.post('/api/test/crash', { schema: { operationId: 'crashForTest' } }, async () => {
+    test.app.post('/api/test/crash', { config: { writesData: false }, schema: { operationId: 'crashForTest' } }, async () => {
       throw new Error('Simulated failure');
     });
     await test.app.inject({ method: 'GET', url: '/api/events' });

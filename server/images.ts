@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { MAX_IMAGE_BYTES } from './config';
+import { assertDataWrite } from './dataWrite';
 
 export type ImageMime = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
 
@@ -101,6 +102,7 @@ export interface ImageRecord {
 
 /** Writes an already-validated image under a random server-generated name. */
 export function writeImageFile(uploadsDir: string, data: Uint8Array, mimeType: ImageMime): ImageRecord {
+  assertDataWrite('writeImageFile()');
   mkdirSync(uploadsDir, { recursive: true });
   const id = randomUUID();
   const fileName = `${id}.${EXTENSIONS[mimeType]}`;
@@ -120,6 +122,7 @@ export function writeImageFile(uploadsDir: string, data: Uint8Array, mimeType: I
 }
 
 export function removeImageFile(uploadsDir: string, fileName: string): void {
+  assertDataWrite('removeImageFile()');
   if (!/^[0-9a-f-]{36}\.(png|jpg|webp|gif)$/.test(fileName)) return;
   rmSync(path.join(uploadsDir, fileName), { force: true });
 }

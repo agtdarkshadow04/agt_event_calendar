@@ -65,6 +65,8 @@ export interface ApiErrorBody {
   error: string;
   message: string;
   fields?: { field: string; message: string }[];
+  /** Values the message needs, e.g. `{ retryAfterSeconds }` for `maintenance` (API-6). */
+  params?: Record<string, string | number | boolean>;
 }
 
 export function imageUrl(imageId: string): string {

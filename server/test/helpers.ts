@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../app';
 import { parseConfigText, resolveConfig } from '../config';
 import type { AppContext } from '../context';
+import { OperationLock } from '../dataWrite';
 import { openDatabase } from '../db';
 import { LogStore } from '../logs';
 import { writeZip } from '../zip';
@@ -37,6 +38,7 @@ export async function createTestServer(
     logs: LogStore.open(config.logDatabaseFile),
     setupPassword: options.setupPassword === undefined ? SETUP_PASSWORD : options.setupPassword,
     version: options.version ?? 'test',
+    operation: new OperationLock(),
   };
   const app = await buildApp(context, { staticDir: options.staticDir });
   return {

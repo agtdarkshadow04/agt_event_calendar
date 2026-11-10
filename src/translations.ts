@@ -26,6 +26,7 @@ const COMMON_TRANSLATIONS = {
 
 const english = {
   ...COMMON_TRANSLATIONS,
+  maintenanceNotice: 'Maintenance in progress. Retrying in a moment…',
   skipToCalendar: 'Skip to calendar',
   syncingDatabase: 'Syncing database',
   databaseOffline: 'Database offline',
@@ -227,6 +228,7 @@ export type Translations = {
 
 const french: Translations = {
   ...COMMON_TRANSLATIONS,
+  maintenanceNotice: 'Maintenance en cours. Nouvelle tentative dans un instant…',
   skipToCalendar: 'Aller au calendrier',
   syncingDatabase: 'Synchronisation de la base de données',
   databaseOffline: 'Base de données hors ligne',
@@ -423,6 +425,7 @@ const french: Translations = {
 
 const german: Translations = {
   ...COMMON_TRANSLATIONS,
+  maintenanceNotice: 'Wartung läuft. Neuer Versuch in Kürze…',
   skipToCalendar: 'Zum Kalender springen',
   syncingDatabase: 'Datenbank wird synchronisiert',
   databaseOffline: 'Datenbank offline',
@@ -619,6 +622,7 @@ const german: Translations = {
 
 const spanish: Translations = {
   ...COMMON_TRANSLATIONS,
+  maintenanceNotice: 'Mantenimiento en curso. Reintentando en un momento…',
   skipToCalendar: 'Ir al calendario',
   syncingDatabase: 'Sincronizando la base de datos',
   databaseOffline: 'Base de datos sin conexión',
@@ -815,6 +819,7 @@ const spanish: Translations = {
 
 const portuguese: Translations = {
   ...COMMON_TRANSLATIONS,
+  maintenanceNotice: 'Manutenção em andamento. Tentando novamente em instantes…',
   skipToCalendar: 'Ir para o calendário',
   syncingDatabase: 'Sincronizando banco de dados',
   databaseOffline: 'Banco de dados offline',
@@ -1011,6 +1016,7 @@ const portuguese: Translations = {
 
 const italian: Translations = {
   ...COMMON_TRANSLATIONS,
+  maintenanceNotice: 'Manutenzione in corso. Nuovo tentativo tra un momento…',
   skipToCalendar: 'Vai al calendario',
   syncingDatabase: 'Sincronizzazione del database',
   databaseOffline: 'Database non in linea',
@@ -1207,6 +1213,7 @@ const italian: Translations = {
 
 const thai: Translations = {
   ...COMMON_TRANSLATIONS,
+  maintenanceNotice: 'กำลังปรับปรุงระบบ จะลองใหม่อีกครั้งในอีกสักครู่…',
   skipToCalendar: 'ข้ามไปยังปฏิทิน',
   syncingDatabase: 'กำลังซิงค์ฐานข้อมูล',
   databaseOffline: 'ฐานข้อมูลออฟไลน์',
@@ -1403,6 +1410,7 @@ const thai: Translations = {
 
 const chinese: Translations = {
   ...COMMON_TRANSLATIONS,
+  maintenanceNotice: '正在维护中，稍后将自动重试…',
   skipToCalendar: '跳转到日历',
   syncingDatabase: '正在同步数据库',
   databaseOffline: '数据库离线',
@@ -1599,6 +1607,7 @@ const chinese: Translations = {
 
 const hindi: Translations = {
   ...COMMON_TRANSLATIONS,
+  maintenanceNotice: 'रखरखाव जारी है। कुछ ही क्षणों में फिर से प्रयास किया जाएगा…',
   skipToCalendar: 'कैलेंडर पर जाएँ',
   syncingDatabase: 'डेटाबेस सिंक हो रहा है',
   databaseOffline: 'डेटाबेस ऑफ़लाइन है',
@@ -1795,6 +1804,7 @@ const hindi: Translations = {
 
 const japanese: Translations = {
   ...COMMON_TRANSLATIONS,
+  maintenanceNotice: 'メンテナンス中です。まもなく再試行します…',
   skipToCalendar: 'カレンダーへ移動',
   syncingDatabase: 'データベースを同期中',
   databaseOffline: 'データベースはオフラインです',

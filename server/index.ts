@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { buildApp } from './app';
 import { ConfigError, loadConfig } from './config';
 import type { AppContext } from './context';
+import { OperationLock } from './dataWrite';
 import { openDatabase } from './db';
 import type { Migration } from './db';
 import { LogStore, createLogger } from './logs';
@@ -47,6 +48,7 @@ async function main() {
     db,
     logs,
     setupPassword: setupPassword.value,
+    operation: new OperationLock(),
     version: appVersion(root),
   };
   // stdout follows server.logLevel; the server log gets info and above (LOG-5).

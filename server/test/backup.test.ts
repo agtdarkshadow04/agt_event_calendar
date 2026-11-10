@@ -214,4 +214,87 @@ describe('backup restore', () => {
 
     assert.equal(readdirSync(test.context.config.backupsDir).filter((name) => name.startsWith('.')).length, 0, 'temp files cleaned up');
   });
+
+  it('checks the manifest format exactly (BAK-2, BAK-7)', async () => {
+    const test = await adminServer();
+    await seed(test);
+    const scratch = mkdtempSync(path.join(tmpdir(), 'agt-manifest-'));
+    const files = await readZip(scratch, await exportBackup(test));
+
+    const exported = JSON.parse(files.get('manifest.json')!.toString());
+    assert.deepEqual(Object.keys(exported).sort(), ['appVersion', 'createdAt', 'files', 'format', 'formatVersion', 'schemaVersion']);
+    assert.equal(exported.formatVersion, 1);
+    assert.match(exported.createdAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    assert.deepEqual(
+      exported.files.map((file: { path: string }) => file.path).sort(),
+      [...files.keys()].filter((name) => name !== 'manifest.json').sort(),
+    );
+    for (const file of exported.files) assert.deepEqual(Object.keys(file).sort(), ['path', 'sha256', 'size']);
+
+    const withManifest = (mutate: (manifest: Record<string, unknown>) => void, entries = files) => {
+      const manifest = structuredClone(exported) as Record<string, unknown>;
+      mutate(manifest);
+      return makeZip(scratch, `${Math.random()}.zip`, [
+        { name: 'manifest.json', data: Buffer.from(JSON.stringify(manifest)) },
+        ...[...entries].filter(([name]) => name !== 'manifest.json').map(([name, data]) => ({ name, data })),
+      ]);
+    };
+    const fileList = (manifest: Record<string, unknown>) => manifest.files as Record<string, unknown>[];
+    const expectRejected = async (zip: Buffer, pattern: RegExp) => {
+      // A restore re-runs the whole preview validation on its own upload (BAK-3).
+      for (const action of ['preview', 'restore'] as const) {
+        const response = await test.restore(zip, action);
+        assert.equal(response.statusCode, 422, `${action}: ${response.body}`);
+        assert.equal(response.json().error, 'archive_rejected');
+        assert.match(response.json().message, pattern);
+      }
+      assert.equal((test.context.db.prepare('SELECT count(*) AS n FROM events').get() as { n: number }).n, 1);
+    };
+
+    await expectRejected(await withManifest((manifest) => { manifest.formatVersion = 2; }),
+      /format version 2 is newer than this application supports \(1\)/);
+    await expectRejected(await withManifest((manifest) => { manifest.formatVersion = '1'; }), /invalid formatVersion/);
+    await expectRejected(await withManifest((manifest) => { manifest.formatVersion = 0; }), /invalid formatVersion/);
+    await expectRejected(await withManifest((manifest) => { manifest.extra = true; }), /exactly the fields/);
+    await expectRejected(await withManifest((manifest) => { Reflect.deleteProperty(manifest, 'appVersion'); }), /exactly the fields/);
+    await expectRejected(await withManifest((manifest) => { manifest.schemaVersion = 'two'; }), /invalid schemaVersion/);
+    await expectRejected(await withManifest((manifest) => { manifest.createdAt = '2026-11-10 06:30'; }), /invalid createdAt/);
+    await expectRejected(await withManifest((manifest) => { fileList(manifest)[0].mode = 'rw'; }), /invalid files entry/);
+    await expectRejected(await withManifest((manifest) => { fileList(manifest)[0].sha256 = 'ABC'; }), /invalid files entry/);
+    for (const unsafe of ['../database.sqlite', '/database.sqlite', 'uploads/./x.png', 'uploads\\x.png', 'uploads//x.png', 'manifest.json']) {
+      await expectRejected(await withManifest((manifest) => {
+        fileList(manifest).push({ path: unsafe, size: 1, sha256: '0'.repeat(64) });
+      }), /unsafe path/);
+    }
+    await expectRejected(await withManifest((manifest) => { fileList(manifest).push({ ...fileList(manifest)[0] }); }), /twice/);
+
+    // Every entry but the manifest is listed, and every listed path exists.
+    const unlisted = new Map(files);
+    unlisted.set('uploads/0b6c2f1e-7d4a-4c1e-9a52-3f0e8d2b6a71.jpg', JPEG);
+    await expectRejected(await withManifest(() => undefined, unlisted), /not listed in the manifest/);
+    const missing = new Map(files);
+    missing.delete('config.yaml');
+    await expectRejected(await withManifest(() => undefined, missing), /listed in the manifest but missing/);
+  });
+
+  it('rejects a backup whose admin password hash fails the AUTH-2 check, in preview and restore', async () => {
+    const test = await adminServer();
+    const scratch = mkdtempSync(path.join(tmpdir(), 'agt-hash-'));
+    const files = await readZip(scratch, await exportBackup(test));
+    const dbFile = path.join(scratch, 'hostile.sqlite');
+    writeFileSync(dbFile, files.get('database.sqlite')!);
+    const db = new Database(dbFile);
+    db.prepare('UPDATE admin SET password_hash = ?').run(`scrypt$1099511627776$8$1$${'A'.repeat(22)}==$${'A'.repeat(86)}==`);
+    db.close();
+    const hostile = new Map(files);
+    hostile.set('database.sqlite', readFileSync(dbFile));
+    const zip = await rezip(scratch, hostile);
+    for (const action of ['preview', 'restore'] as const) {
+      const response = await test.restore(zip, action);
+      assert.equal(response.statusCode, 422, response.body);
+      assert.match(response.json().message, /admin password hash is malformed/);
+    }
+    const session = await test.app.inject({ method: 'GET', url: '/api/admin/session', headers: test.headers });
+    assert.equal(session.statusCode, 200, 'nothing was restored');
+  });
 });

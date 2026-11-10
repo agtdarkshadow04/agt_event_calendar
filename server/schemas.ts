@@ -27,6 +27,9 @@ export const ErrorBodySchema = Type.Object({
   error: Type.String({ description: 'Stable snake_case error code.' }),
   message: Type.String({ description: 'English, human-readable message.' }),
   fields: Type.Optional(Type.Array(FieldErrorSchema, { description: 'Per-field validation errors.' })),
+  params: Type.Optional(Type.Record(Type.String(), Type.Union([Type.String(), Type.Number(), Type.Boolean()]), {
+    description: 'Values the message needs, e.g. `{ retryAfterSeconds }` for `maintenance` (the `Retry-After` header is sent too).',
+  })),
 }, { description: 'Error response.' });
 
 export const OkSchema = Type.Object({ ok: Type.Literal(true) });

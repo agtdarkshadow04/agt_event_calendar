@@ -17,6 +17,7 @@ import { findEventByAnyId, toCalendarEvent } from './lib/api';
 import type { ApiEvent, PublicSettings } from './lib/api';
 import { loadBookmarks, migrateLegacyBookmarks, saveBookmarks } from './lib/bookmarks';
 import { ApiError, apiRequest } from './lib/client';
+import { MaintenanceNotice } from './components/MaintenanceNotice';
 import { formatAtUtcOffset } from './lib/date';
 import { filterEvents } from './lib/filter';
 import {
@@ -361,6 +362,8 @@ function App() {
         </div>
         <div className="header-divider" />
       </header>
+
+      <MaintenanceNotice className="maintenance-notice" text={translations.maintenanceNotice} />
 
       <main id="main-content" className="main-content">
         <section className="intro" aria-labelledby="page-heading">

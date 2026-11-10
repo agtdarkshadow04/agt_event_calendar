@@ -383,13 +383,17 @@ ZIPs with absolute paths, `..` segments or symbolic links, and ZIPs that exceed 
 - `database.sqlite`: a consistent snapshot made with SQLite's online backup (sessions are removed),
 - `uploads/`: all uploaded images,
 - `config.yaml`: the current file exactly as mounted,
-- `manifest.json`: app version, database schema version, creation time and a SHA-256 checksum for every file.
+- `manifest.json`: the backup format and its version, the app version, the database schema version, the creation time, and the size and SHA-256 checksum of every other file.
 
-`.env` and the logs (`logs.sqlite`) are **never** included. The backup **does** contain sensitive data (the admin password hash and, if generated, the captcha key), so store it securely. External images referenced in descriptions are not included, because the app does not host them.
+`.env` and the logs (`logs.sqlite`) are **never** included. The backup **does** contain sensitive data (the admin password hash and the generated captcha key), so store it securely, and only restore backups made by an instance you trust. External images referenced in descriptions are not included, because the app does not host them.
+
+The backup is consistent: while it is made, the calendar keeps serving pages and reads, and changes (an edit, an upload, a public submission) wait until the snapshot of the database and the uploads is done. A change that is already running when you click **Download backup** finishes first and is in the backup. If a change is still running after 30 seconds, the backup is cancelled with "The server is busy. Try again." and nothing is affected; a change that waits more than 30 seconds for a backup gets "Maintenance in progress" and can simply be repeated. Only one backup or restore runs at a time; another one gets "A backup or restore is already running."
 
 ### Restore
 
-Upload a backup under **Backup & restore → Restore** and review the preview. Before anything is replaced, the server checks the manifest checksums, that the archive contains only expected paths and is within the size limits, that the database passes `PRAGMA integrity_check` and has the expected schema (older schema versions are upgraded; newer ones are refused), and that every image passes the image checks.
+Upload a backup under **Backup & restore → Restore** and review the preview. Before anything is replaced, the server checks the manifest (its exact format, a format version this app can read, safe file paths, and that it lists every file in the archive with the right checksum), that the archive is within the size limits, that the database passes `PRAGMA integrity_check` and has the expected schema (older schema versions are upgraded; newer ones are refused), that every image passes the image checks, and that the backup's admin password hash is valid. Confirming the restore uploads the file again, and all of these checks run again on that upload before anything changes.
+
+While the restore runs, every API request gets `503` "Maintenance in progress" and the pages show a notice that retries automatically; `GET /api/health` answers `{ "status": "maintenance" }`, so Docker does not restart the container. The restore first waits up to 30 seconds for requests already in progress; if one is still running then, it is cancelled with "The server is busy. Try again." and nothing changes.
 
 Restoring replaces the database, uploads and dashboard settings, **including the admin account**, and signs you out. An automatic backup of the current state is saved first to `backups/pre-restore-backup-<timestamp>.zip` in the data directory (`/app/data` with Docker, `/var/lib/agt-event-calendar` for a local installation), and files are swapped so that a failed restore leaves the instance unchanged. Dashboard settings in the backup for keys that `config.yaml` now defines are ignored and listed in the report. The server log and audit log are not changed by a restore, and the restore is recorded in the audit log.
 
