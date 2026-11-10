@@ -4,15 +4,25 @@ import type { Challenge } from 'altcha-lib';
 import { deriveKey } from 'altcha-lib/algorithms/sha';
 import altchaFastify from 'altcha-lib/frameworks/fastify';
 import type { AppContext } from './context';
-import { getOrCreateSecret, markAltchaUsed } from './repository';
+import type { Db } from './db';
+import { createSecretIfMissing, getSecret, markAltchaUsed } from './repository';
 
 /**
- * Self-hosted ALTCHA proof-of-work captcha. The HMAC key comes from
- * `altcha.hmacKey` in config.yaml or is generated once and stored in the DB.
+ * Self-hosted ALTCHA proof-of-work captcha. The HMAC key is generated (32 random bytes) and stored in `app_secrets`
+ * at startup and after a restore whose data has none (ALT-2). Requests only read it. It is never configured:
+ * the deprecated `altcha.hmacKey` in config.yaml is ignored.
  */
+const HMAC_KEY = 'altcha_hmac_key';
+
+/** Creates the HMAC key if the database has none. Returns true if it created one. */
+export function ensureAltchaKey(db: Db): boolean {
+  return createSecretIfMissing(db, HMAC_KEY, () => randomBytes(32).toString('hex'));
+}
+
 function hmacKey(context: AppContext): string {
-  return context.config.altcha.hmacKey
-    ?? getOrCreateSecret(context.db, 'altcha_hmac_key', () => randomBytes(32).toString('hex'));
+  const key = getSecret(context.db, HMAC_KEY);
+  if (key === null) throw new Error('The ALTCHA HMAC key is missing; it is created at startup.');
+  return key;
 }
 
 export async function createAltchaChallenge(context: AppContext): Promise<Challenge> {

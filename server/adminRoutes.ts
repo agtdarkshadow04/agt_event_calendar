@@ -17,7 +17,7 @@ import { HttpError, readMultipart } from './http';
 import { removeImageFile, validateImage, writeImageFile } from './images';
 import { registerLogRoutes } from './logRoutes';
 import { migrateFromAmplify } from './migration';
-import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, hashPassword, verifyPassword } from './passwords';
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, checkAdminPassword, hashPassword } from './passwords';
 import { SECURITY, errorResponses } from './openapi';
 import {
   deleteAllSessions, deleteChangeLog, deleteEvent, deleteHoliday, deleteImageRow, deleteSetting, getAdmin, getChangeLog,
@@ -107,7 +107,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
     config: { rateLimit: { max: context.config.rateLimits.login.max, timeWindow: context.config.rateLimits.login.windowMinutes * 60_000 } },
   }, async (request, reply) => {
     const admin = getAdmin(context.db);
-    if (!admin || !(await verifyPassword(request.body.currentPassword, admin.password_hash))) {
+    if (!admin || !(await checkAdminPassword(request.log, request.body.currentPassword, admin.password_hash))) {
       throw new HttpError(401, 'invalid_credentials', 'The current password is incorrect.');
     }
     if (request.body.newPassword.length < MIN_PASSWORD_LENGTH) {

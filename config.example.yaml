@@ -13,8 +13,12 @@
 
 # server:
   # Address and port the HTTP server listens on (plain HTTP; put your own
-  # TLS-terminating reverse proxy in front of it).
-  # host: 0.0.0.0
+  # TLS-terminating reverse proxy in front of it). The default keeps the app
+  # reachable from this host only. When unset, AGT_SERVER_HOST is used if set
+  # (the Docker image sets 0.0.0.0, and docker-compose.yml publishes the port
+  # on 127.0.0.1 only), else 127.0.0.1. Listen on another interface only for a
+  # proxy on another machine, and firewall the port to that proxy.
+  # host: 127.0.0.1
   # port: 8080
   # Set to true (or to the proxy's IP or CIDR range) when the app runs behind
   # a reverse proxy, so client IPs and https are detected correctly.
@@ -49,9 +53,9 @@
     # windowMinutes: 15
 
 # altcha:
-  # HMAC key for the self-hosted ALTCHA captcha (at least 32 characters).
-  # When unset, a random key is generated once and stored in the database.
-  # hmacKey: replace-with-a-long-random-string
+  # The captcha's HMAC key is generated and stored in the database; it is never
+  # configured. A leftover hmacKey here is ignored, and the server log warns
+  # until you remove it.
   # Proof-of-work cost; higher is slower for visitors and bots alike.
   # cost: 5000
   # challengeTtlSeconds: 600

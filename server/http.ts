@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isIP } from 'node:net';
 import { createWriteStream, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -15,6 +16,13 @@ export class HttpError extends Error {
   ) {
     super(message);
   }
+}
+
+/** True for an IPv4 or IPv6 loopback address, including IPv4-mapped IPv6 (`::ffff:127.0.0.1`). */
+export function isLoopbackAddress(ip: string): boolean {
+  const address = ip.toLowerCase().replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/, '');
+  if (isIP(address) === 4) return address.startsWith('127.');
+  return address === '::1' || address === '0:0:0:0:0:0:0:1';
 }
 
 export interface UploadedFile {

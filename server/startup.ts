@@ -18,6 +18,22 @@ export interface StartupInfo {
   address: string;
 }
 
+/** The longest setup password, in Unicode code points as read from the environment (AUTH-5). */
+export const MAX_SETUP_PASSWORD_LENGTH = 1024;
+
+/**
+ * Reads `AGT_SETUP_PASSWORD`. An empty value means "not set". While no admin exists, a value longer than 1024
+ * characters stops the server (AUTH-5, SRV-8): it could never be typed into a setup request. Once the admin exists
+ * the value is only warned about (AUTH-6).
+ */
+export function readSetupPassword(raw: string | undefined, adminExists: boolean): { value: string | null; error: string | null } {
+  const value = raw?.trim() || null;
+  if (value !== null && !adminExists && [...raw!].length > MAX_SETUP_PASSWORD_LENGTH) {
+    return { value, error: `AGT_SETUP_PASSWORD is longer than ${MAX_SETUP_PASSWORD_LENGTH} characters. Set a shorter value in .env and restart.` };
+  }
+  return { value, error: null };
+}
+
 export function logStartup(log: FastifyBaseLogger, context: AppContext, info: StartupInfo): void {
   for (const migration of info.logMigrations) {
     log.info({ source: 'migrations', store: 'logs', version: migration.version, name: migration.name }, `Applied log store migration ${migration.name}.`);
@@ -29,6 +45,11 @@ export function logStartup(log: FastifyBaseLogger, context: AppContext, info: St
   const { config } = context;
   const configFile = config.rawText === null ? null : config.filePath;
   if (configFile === null) log.warn({ source: 'config', configFile: config.filePath }, `No configuration file at ${config.filePath}; using defaults.`);
+
+  if (config.file.altcha?.hmacKey !== undefined) {
+    log.warn({ source: 'config', key: 'altcha.hmacKey' },
+      'altcha.hmacKey in config.yaml is deprecated and ignored: the captcha key is generated and stored in the database. Remove it from config.yaml.');
+  }
 
   if (getAdmin(context.db)) {
     if (context.setupPassword) {

@@ -16,12 +16,28 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
   `npm ci` now stops with an engine error on older versions. Docker Compose installations need no action: the image
   is now built from `node:26-bookworm-slim`
   ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
+- **The app is now reachable only from the host it runs on.** It serves plain HTTP, so a local installation now
+  listens on `127.0.0.1` by default (`server.host`), and `docker-compose.yml` publishes `127.0.0.1:8080:8080` instead
+  of `8080:8080`. If visitors reach the calendar directly on port 8080 from other machines, put a TLS-terminating
+  reverse proxy on the same host (README: *TLS and reverse proxies*, `deploy/Caddyfile.example`) and set
+  `server.trustProxy`. Docker installations with their own `docker-compose.yml` should change the published port the
+  same way. Only if the proxy runs on another machine, set `server.host` (local) or the published address (Docker) to
+  an interface it can reach, and firewall that port to the proxy
+  ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
+- **`altcha.hmacKey` is ignored.** The captcha key is now always generated and stored in the database. If
+  `config.yaml` sets it, remove the line: the server log warns at every startup until you do, and a later release
+  will reject it as an unknown key. Captcha challenges issued before the upgrade fail once, and visitors verify again
+  ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
 
 ### Added
 
 - A GitHub Actions workflow runs `npm ci`, checks that every dependency install script is approved or denied, and runs
   `npm run check` on every pull request and push to `main`
   ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
+- A `security` server-log warning, once per process, when a login or setup request arrives over plain HTTP from
+  another host ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
+- The `AGT_SERVER_HOST` environment variable sets the listen address when `server.host` is not in `config.yaml`;
+  the Docker image sets `0.0.0.0` ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
 - `package.json` approves the install scripts of `better-sqlite3` and `esbuild` in `allowScripts`, so `npm ci` behaves
   the same with npm 11.20 and newer ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
 
@@ -32,6 +48,25 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
   ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
 - Build tools: TypeScript 7.0, Vite 8.3, `@vitejs/plugin-react` 6.3 and esbuild 0.28
   ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
+- The captcha key is generated at startup, and after a restore whose data has none, instead of by the first captcha
+  request ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
+- While no admin exists, an `AGT_SETUP_PASSWORD` longer than 1024 characters stops the server with a clear message
+  ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
+
+### Deprecated
+
+- `altcha.hmacKey` in `config.yaml`: accepted but ignored, with a startup warning
+  ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
+
+### Security
+
+- Stored password hashes are checked before scrypt runs: anything but six fields with the `32768/8/1` profile, a
+  16-byte salt and a 64-byte key is rejected like a wrong password, with a server-log error. scrypt always runs with
+  fixed parameters, so a crafted hash in the database or a backup can no longer make a login use unbounded CPU or
+  memory ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60),
+  [#38](https://github.com/agtdarkshadow04/agt_event_calendar/issues/38)).
+- The default listen address is `127.0.0.1`, and Compose publishes the port on `127.0.0.1` only (see Upgrade notes)
+  ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
 
 ## [2.2.0] - 2026-11-10
 

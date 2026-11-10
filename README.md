@@ -45,7 +45,7 @@ Edit `.env` and set a temporary `AGT_SETUP_PASSWORD` (see [First run](#first-run
 docker compose up -d --build
 ```
 
-The calendar is served over plain HTTP on port 8080: `http://localhost:8080/`. The admin dashboard is at `http://localhost:8080/admin`.
+The calendar is served over plain HTTP on port 8080 of this host only: `http://localhost:8080/`. The admin dashboard is at `http://localhost:8080/admin`. To make it reachable from other machines, put a TLS proxy in front (see [TLS and reverse proxies](#tls-and-reverse-proxies)).
 
 What `docker-compose.yml` sets up:
 
@@ -54,7 +54,7 @@ What `docker-compose.yml` sets up:
 | Volume `calendar-data` → `/app/data` | SQLite database, uploaded images and automatic pre-restore backups. Survives restarts and image upgrades. |
 | `./config.yaml` → `/app/config.yaml` | Mounted **read-only**. |
 | `env_file: .env` | Secrets and bootstrap values only (`AGT_SETUP_PASSWORD`). |
-| Port `8080` | One HTTP port. |
+| Port `127.0.0.1:8080` | One HTTP port, published on the host's loopback interface only. Inside the container the app listens on `0.0.0.0` (`AGT_SERVER_HOST`, set by the `Dockerfile`). |
 | Healthcheck | `GET /api/health`. |
 | User | The container runs as the non-root `node` user with a read-only root filesystem. |
 
@@ -115,13 +115,17 @@ The app runs as a hardened systemd service under its own system user. Paths:
    sudo systemctl enable --now agt-event-calendar
    ```
 
-The calendar is served over plain HTTP on port 8080: `http://localhost:8080/`, and the admin dashboard at `http://localhost:8080/admin`. Logs: `journalctl -u agt-event-calendar`.
+The calendar is served over plain HTTP on port 8080, listening on `127.0.0.1` only: `http://localhost:8080/`, and the admin dashboard at `http://localhost:8080/admin`. To make it reachable from other machines, put a TLS proxy in front (see [TLS and reverse proxies](#tls-and-reverse-proxies)). Logs: `journalctl -u agt-event-calendar`.
 
 ### TLS and reverse proxies
 
-The app serves **plain HTTP only**; TLS is up to you. Put it behind your own TLS-terminating reverse proxy (Caddy, nginx, Traefik, …) and set `server.trustProxy` in `config.yaml` (to `true`, or to your proxy's address) so client IPs and HTTPS are detected. With `session.secureCookie: auto` (the default), the admin session cookie is then marked `Secure` automatically for HTTPS requests.
+The app serves **plain HTTP only**, so by default it is reachable **only from the host it runs on**: a local installation listens on `127.0.0.1` (`server.host`), and Docker Compose publishes the port on `127.0.0.1` only. To serve it to other machines, put your own TLS-terminating reverse proxy (Caddy, nginx, Traefik, …) in front of it. Never expose the plain HTTP port itself: the admin password would cross the network unencrypted. If a login or setup request arrives over plain HTTP from another machine, the server log gets a `security` warning.
 
-[`deploy/Caddyfile.example`](deploy/Caddyfile.example) is a complete Caddy configuration, including automatic certificates. When the proxy runs on the same host as a local installation, also set `server.host: 127.0.0.1` so the app is reachable only through the proxy. With Docker, publish the port on the loopback interface instead (`"127.0.0.1:8080:8080"` in `docker-compose.yml`).
+1. Install the proxy on the same host. [`deploy/Caddyfile.example`](deploy/Caddyfile.example) is a complete Caddy configuration, including automatic certificates; it proxies to `127.0.0.1:8080`.
+2. Set `server.trustProxy` in `config.yaml` to the address the app sees the proxy connect from, so client IPs and HTTPS are detected: `127.0.0.1` for a local installation, or the Docker network's gateway or the proxy container's address/CIDR with Docker.
+3. Keep `session.secureCookie: auto` (the default): the admin session cookie is then marked `Secure` for HTTPS requests.
+
+Only if the proxy runs on **another machine**, make the app listen where that proxy can reach it: set `server.host` to that interface's address (local installation), or change the published address in `docker-compose.yml` (for example `"192.0.2.10:8080:8080"`, Docker). Then restrict that port to the proxy's address with a firewall.
 
 ### Upgrading
 
@@ -189,7 +193,7 @@ Downgrading in place is not supported: when the newer version has migrated the d
    ```
 
 2. Start the app and open `/admin`. Because no admin account exists yet, the dashboard shows a setup screen.
-3. Enter the setup password, then choose the admin **username** and a **new** admin password (at least 12 characters). The setup password does not become the admin password and cannot be reused as it.
+3. Enter the setup password, then choose the admin **username** (1–64 characters; surrounding spaces are removed) and a **new** admin password (12–1024 characters). The setup password does not become the admin password and cannot be reused as it.
 4. **Remove `AGT_SETUP_PASSWORD` from `.env` and restart**: `docker compose up -d` with Docker, or `sudo systemctl restart agt-event-calendar` for a local installation.
 
 The setup password is used **only on first run**. Once the admin account exists it is ignored permanently and the setup endpoint is disabled, even if the variable is still set. While it is still set, the server logs a warning at every startup and the dashboard shows a reminder to remove it. If no admin exists and the variable is unset or empty, setup is refused with a message telling you to set it and restart.
@@ -198,12 +202,21 @@ There is exactly one admin account. Its password is stored only as a salted one-
 
 ## Configuration reference
 
-Configuration comes from two places:
+Configuration comes from three places:
 
 - **`config.yaml`** (mounted read-only with Docker; `/etc/agt-event-calendar/config.yaml` for a local installation) for everything that is not secret. It is validated at startup against a schema: an invalid value or an unknown key stops the server with an error naming the bad key. A missing file means "all defaults".
-- **`.env`** for secrets and bootstrap values only: `AGT_SETUP_PASSWORD`. `.env` is git-ignored and never included in backups.
+- **The process environment**, for the variables below only. `.env` holds the operator's secrets and bootstrap values; the others are set by the shipped `Dockerfile`, systemd unit or development tooling, and you change them only by editing those files.
+- **Dashboard settings** for the keys in the second table below, unless `config.yaml` defines them.
 
-The variable names (`AGT_SETUP_PASSWORD`, `AGT_CONFIG_FILE`) predate the AGT web app naming scheme (`AGT_<APP>_…`) and are kept so that existing installations keep working.
+| Variable | Set by | Purpose |
+| --- | --- | --- |
+| `AGT_SETUP_PASSWORD` | You, in `.env` | First-run setup only (see [First run](#first-run)). At most 1024 characters: while no admin exists, a longer value stops the server. |
+| `AGT_CONFIG_FILE` | `Dockerfile` / systemd unit | Path of `config.yaml` (default `./config.yaml`). |
+| `AGT_SERVER_HOST` | `Dockerfile` | Listen address when `server.host` is not in `config.yaml`. The Docker image sets `0.0.0.0`. |
+| `AGT_STATIC_DIR` | Development only | Override path to the built `dist/`. |
+| `NODE_ENV` | `Dockerfile` / systemd unit | `production`. |
+
+`.env` is git-ignored and never included in backups. The variable names predate the AGT web app naming scheme (`AGT_<APP>_…`) and are kept so that existing installations keep working.
 
 `config.example.yaml` documents every key with its default.
 
@@ -220,7 +233,7 @@ This is enforced on the server. No API path, migration, backup restore or bulk u
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `server.host` | `0.0.0.0` | Listen address. |
+| `server.host` | `127.0.0.1` | Listen address. When unset, `AGT_SERVER_HOST` is used if set (`0.0.0.0` in the Docker image), else `127.0.0.1`, so a default installation is reachable from its own host only. See [TLS and reverse proxies](#tls-and-reverse-proxies). |
 | `server.port` | `8080` | Listen port. |
 | `server.trustProxy` | `false` | `true`, or the proxy's IP/CIDR (string or list), when behind a reverse proxy. |
 | `server.logLevel` | `info` | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent`. |
@@ -234,9 +247,10 @@ This is enforced on the server. No API path, migration, backup restore or bulk u
 | `rateLimits.login` | `max: 10`, `windowMinutes: 15` | Admin login attempts per client. |
 | `rateLimits.setup` | `max: 10`, `windowMinutes: 15` | First-run setup attempts per client. |
 | `rateLimits.adminUploads` | `max: 120`, `windowMinutes: 15` | Admin image uploads per client. |
-| `altcha.hmacKey` | *(generated)* | HMAC key for the captcha (≥ 32 characters). When unset, a random key is generated once and stored in the database. |
 | `altcha.cost` | `5000` | Proof-of-work cost. |
 | `altcha.challengeTtlSeconds` | `600` | Challenges expire after this time. |
+
+The captcha's HMAC key is generated at startup and stored in the database; it is never configured. `altcha.hmacKey` from earlier versions is deprecated: it is ignored, the server log warns at every startup until you remove it, and a later release will reject it as an unknown key.
 
 ### Keys that can also be set in the dashboard
 
@@ -448,7 +462,11 @@ Start with the **Server log** tab in the admin dashboard: warnings and errors sh
 
 ### The server refuses to start
 
-Read the log: `docker compose logs calendar` with Docker, or `journalctl -u agt-event-calendar` for a local installation. An invalid `config.yaml` is reported with the offending key, for example `Invalid config.yaml: server.prot: Unexpected property`.
+Read the log: `docker compose logs calendar` with Docker, or `journalctl -u agt-event-calendar` for a local installation. An invalid `config.yaml` is reported with the offending key, for example `Invalid config.yaml: server.prot: Unexpected property`. While no admin exists, an `AGT_SETUP_PASSWORD` longer than 1024 characters also stops the server: set a shorter value in `.env` and restart.
+
+### The calendar can't be reached from another machine
+
+That is the default: the app is reachable only from the host it runs on, because it serves plain HTTP. Put a TLS proxy in front of it as described in [TLS and reverse proxies](#tls-and-reverse-proxies).
 
 ### Setup says AGT_SETUP_PASSWORD is not set
 

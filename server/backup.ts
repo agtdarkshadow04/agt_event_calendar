@@ -9,6 +9,7 @@ import path from 'node:path';
 import { SETTING_KEYS } from './config';
 import type { AppContext } from './context';
 import { isDefinedInConfig } from './context';
+import { ensureAltchaKey } from './altcha';
 import { missingTables, openDatabase, runMigrations, schemaVersion, SCHEMA_VERSION } from './db';
 import type { Db } from './db';
 import { STORED_IMAGE_NAME, validateImage } from './images';
@@ -338,6 +339,8 @@ export async function restoreBackup(context: AppContext, zipPath: string): Promi
       context.db = openDatabase(databaseFile);
       throw error;
     }
+    // Restored data from before generated secrets existed gets its own key (ALT-2).
+    ensureAltchaKey(context.db);
     rmSync(oldDb, { force: true });
     rmSync(oldUploads, { recursive: true, force: true });
     return staged.report;
