@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Spec version** | 2.0.0 |
+| **Spec version** | 3.0.0 |
 | **Status** | Normative |
 | **Audience** | AI coding agents that design, build, review or maintain AGT web applications |
 | **Reference implementation** | [`Folfchie/agt_event_calendar`](https://github.com/Folfchie/agt_event_calendar) (AGT Event Calendar), with the deviations listed in [Appendix A](#appendix-a-reference-implementation-deviations) |
@@ -32,7 +32,8 @@ change an existing one.
   A deviation that is not documented is a bug.
 - **When the spec is silent,** do what the reference implementation does. If the reference implementation
   is listed in Appendix A for that topic, follow the spec, not the reference.
-- **Changing this spec.** Change it in a PR of its own. Bump the version: major for a new or stricter MUST,
+- **Changing this spec.** Change it in a PR of its own. Bump the spec version (this is separate from the apps'
+  versions, which follow [§21](#21-versioning-and-releases)): major for a new or stricter MUST,
   minor for a new SHOULD/MAY or a new section, patch for clarifications. New design tokens, locales and
   registry entries are added here first, then in apps.
 
@@ -122,6 +123,7 @@ agt_<app_snake>/
 ├── CLAUDE.md
 ├── README.md                 # operator documentation (§20.1)
 ├── LICENSE
+├── CHANGELOG.md              # release notes (§21.5)
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example              # secrets/bootstrap only, documented
@@ -291,7 +293,8 @@ agt_<app_snake>/
   Multipart and binary endpoints describe their parts/content types in the schema (`consumes`,
   `produces`, or `content` objects) so the document is complete.
 - **API-12** The OpenAPI `info.version` equals the app version. A breaking API change (removed field, renamed
-  route, changed semantics) MUST bump the app's major version and be listed in the release notes / change log.
+  route, changed semantics) MUST bump the app's major version (VER-3), after a deprecation period (VER-10), and be
+  listed in `CHANGELOG.md` with an upgrade note (VER-9).
 - **API-13** A server test MUST build the app, fetch `/api/openapi.json`, and assert that:
   every `/api/` route registered on the app (except `hide: true` ones) appears in the document; every
   operation has a unique `operationId`, `tags`, a `2xx` response with a schema and a `default` error
@@ -1122,8 +1125,9 @@ Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods 
   # AGT_<APP>_DB_PASSWORD=
   ```
 
-- **DEP-5** Upgrades: `git pull && docker compose up -d --build`. Migrations run at startup. The README says
-  to download a backup first.
+- **DEP-5** Upgrades (VER-13): read the CHANGELOG upgrade notes and download a backup, then
+  `git fetch --tags && git checkout vX.Y.Z && docker compose up -d --build`. Migrations run at startup. Install
+  instructions likewise check out the latest release tag after `git clone`.
 
 ### 18.2 Local installation (Ubuntu / Debian)
 
@@ -1138,6 +1142,7 @@ Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods 
   # 2. System user and code
   sudo useradd --system --home-dir /var/lib/agt-<app> --shell /usr/sbin/nologin agt-<app>
   sudo git clone https://github.com/<owner>/agt_<app_snake>.git /opt/agt-<app>
+  sudo git -C /opt/agt-<app> checkout vX.Y.Z   # the latest release (VER-13)
   cd /opt/agt-<app>
   sudo npm ci && sudo npm run build && sudo npm prune --omit=dev
 
@@ -1204,7 +1209,8 @@ Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods 
 - **DEP-8** The README's First run section gives the local equivalent of "remove the setup password and
   restart": delete the line from `/etc/agt-<app>/.env`, then `sudo systemctl restart agt-<app>`. Logs:
   `journalctl -u agt-<app>`.
-- **DEP-9** Local upgrades: `cd /opt/agt-<app> && sudo git pull && sudo npm ci && sudo npm run build &&
+- **DEP-9** Local upgrades (VER-13): read the CHANGELOG upgrade notes and download a backup, then
+  `cd /opt/agt-<app> && sudo git fetch --tags && sudo git checkout vX.Y.Z && sudo npm ci && sudo npm run build &&
   sudo npm prune --omit=dev && sudo systemctl restart agt-<app>`.
 
 ### 18.3 TLS reverse proxy
@@ -1259,6 +1265,9 @@ Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods 
     skipped; `config.yaml` never written; pre-restore backup created;
   - migrations from an empty database and from each released schema version;
   - translation completeness for public and admin strings;
+  - versioning (§21): `package.json` holds a valid SemVer version (VER-1); the newest `CHANGELOG.md` heading is
+    that version; every major version's section has **Upgrade notes**; `/api/openapi.json` reports the same
+    version;
   - every shared validator in `src/lib/validation.ts`;
   - logging (§13):
     - every non-GET `/api/` route, and every `config.audit` GET route, writes an audit entry, with the right
@@ -1285,8 +1294,9 @@ Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods 
   a one-paragraph description and the self-hosting guarantees (no cloud, no CDNs, no outbound requests,
   where data lives). Then these sections, in order:
   1. **Contents**
-  2. **Installation**: *Docker Compose* (§18.1) and *Local installation (Ubuntu/Debian)* (§18.2), *TLS and
-     reverse proxies*, *Upgrading*
+  2. **Installation**: *Docker Compose* (§18.1) and *Local installation (Ubuntu/Debian)* (§18.2), both checking
+     out a release tag, *TLS and reverse proxies*, *Upgrading* (read the upgrade notes in `CHANGELOG.md`, back up,
+     check out the new tag) and *Rolling back* (VER-13)
   3. **First run** (AUTH-5/6, including removing the setup password and restarting, for both methods)
   4. **Configuration reference**: sources, precedence, table of config-file-only keys, table of
      dashboard-editable keys (key, default, description)
@@ -1309,7 +1319,122 @@ Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods 
   web app spec** (rule ID, what differs, why; "None" if empty). Keep it short and current; update it in the
   same PR as the code it describes.
 
-## 21. Agent workflow
+## 21. Versioning and releases
+
+Every AGT app is versioned with [Semantic Versioning 2.0.0](https://semver.org/): `MAJOR.MINOR.PATCH`. The version
+tells operators what an upgrade means for them. A major upgrade may need action, while a minor or patch upgrade
+never does.
+
+### 21.1 The version number
+
+- **VER-1** The app version is the `version` field in `package.json`, and nowhere else. `package-lock.json` follows
+  it: set both with `npm version <version> --no-git-tag-version`. The version is a full SemVer version without build
+  metadata: `MAJOR.MINOR.PATCH`, optionally followed by a release-candidate suffix (VER-7).
+- **VER-2** The app reports its version, always read from `package.json` at startup (SRV-3):
+  - OpenAPI `info.version` (API-12);
+  - `appVersion` in every backup manifest (BAK-2);
+  - the startup server log entry (LOG-8);
+  - the admin dashboard header, from `version` in `GET /api/admin/session`.
+
+  The public UI does not need to show it.
+
+### 21.2 What each part means
+
+Classify a change by its effect on the people who run and use the app: operators (install, config, upgrade),
+API clients, and users. When a change fits more than one level, the highest level wins. When in doubt, choose the
+higher level.
+
+- **VER-3** **MAJOR**: the upgrade can break an existing installation or client, or needs operator action. That
+  is any of:
+  - **API break** (API-12): a removed or renamed route, parameter or response field; a changed type or meaning; a
+    newly required request field; stricter validation that rejects input the previous version accepted; a changed
+    status code or response shape.
+  - **Operator break**: a removed or renamed `config.yaml` key, environment variable, Compose service or volume,
+    install path, systemd unit or default port; a changed default that changes how existing installations behave;
+    a change that stops backups made by the previous version from being restored.
+  - **Irreversible data change**: a migration that deletes or rewrites existing data (dropping a table or column
+    that holds data, transforming stored values). Migrations that only add schema are not major (VER-4).
+  - **Raised runtime requirement**: a newer Node.js major, PostgreSQL major, Ubuntu/Debian release or Docker Compose
+    feature than the previous version needed.
+  - **Database engine change** (DATA-1).
+- **VER-4** **MINOR**: new capability that existing installations and clients can ignore:
+  - new features, routes, optional request fields, query parameters and response fields;
+  - new config keys or settings whose defaults keep the current behaviour;
+  - additive migrations (new tables, columns, indexes, backfills that don't lose data);
+  - new locales or UI text;
+  - deprecations (VER-10);
+  - visible UI changes, including removing a UI-only feature that has no API or configuration impact (list it
+    under **Removed**).
+- **VER-5** **PATCH**: corrections that keep documented behaviour: bug fixes, security fixes, translation fixes,
+  performance improvements, refactors, and dependency updates that don't raise runtime requirements or change
+  behaviour.
+- **VER-6** **No bump**: changes to files that don't ship (documentation outside the UI, tests, CI, `AGENTS.md`,
+  this spec). Anything that changes what is built or deployed (code, assets, migrations, `Dockerfile`,
+  `docker-compose.yml`, `deploy/`, `config.example.yaml`) needs at least a patch.
+
+### 21.3 Pre-1.0 and release candidates
+
+- **VER-7** New apps start at `0.1.0`. While the major version is 0, a change that VER-3 calls major bumps the
+  MINOR version, and everything else bumps PATCH. Release `1.0.0` when the app is first deployed to a live instance;
+  from then on VER-3..6 apply in full.
+
+  Release candidates `X.Y.Z-rc.N` (N from 1) MAY be tagged to test a release before it ships. Set the version to
+  `X.Y.Z-rc.N` in a PR, tag it, then set it back to `X.Y.Z` for the release. Release candidates never run on a live
+  instance.
+
+### 21.4 Bumping in each PR
+
+- **VER-8** Each PR that VER-6 does not exempt bumps the version in the same PR, relative to the **last released
+  version** (the newest `vX.Y.Z` tag, VER-11), to the level its changes need. `main` therefore always carries the
+  version that would ship next. If `main` already carries an unreleased bump at that level or higher, the PR keeps
+  it. Example: after release `2.1.0`, a fix makes `main` `2.1.1`. A new feature then makes it `2.2.0`, and a second
+  feature keeps `2.2.0`. A breaking change then makes it `3.0.0`.
+
+  The PR description states the level and the rule that requires it (e.g. "Minor: new optional query parameter,
+  VER-4").
+
+### 21.5 CHANGELOG
+
+- **VER-9** Every app has a `CHANGELOG.md` at the repository root in [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/)
+  format. The PR that changes the app also adds its entries.
+  - Headings: `## [X.Y.Z] - Unreleased` while unreleased (it always matches `package.json`), then
+    `## [X.Y.Z] - YYYY-MM-DD` when released. Newest first.
+  - Groups, in this order and only when non-empty: **Upgrade notes** (major versions only, and always present for
+    them), **Added**, **Changed**, **Deprecated**, **Removed**, **Fixed**, **Security**.
+  - Entries are short sentences for operators and users, not commit messages, and link the PR.
+  - **Upgrade notes** say exactly what an operator must do before or after upgrading: back up first; renamed keys
+    or variables, old and new; new runtime requirements; one-time steps. Every breaking change in the version has a
+    note.
+  - The in-app change log, if an app has one, is separate user-facing content; it does not replace `CHANGELOG.md`.
+
+### 21.6 Deprecation
+
+- **VER-10** Before a major version removes or renames a `config.yaml` key, environment variable, or API route,
+  parameter or field, that item MUST be deprecated in at least one earlier minor release:
+  - it keeps working unchanged;
+  - `CHANGELOG.md` lists it under **Deprecated**, with its replacement and the major version that removes it;
+  - API routes and schema properties are marked `deprecated: true`, so they show as deprecated in `/api/openapi.json`;
+  - a renamed config key or environment variable is accepted under both names. If both are set, the new one wins,
+    and the server log warns once at startup (LOG-8) whenever the old name is used.
+
+  A security fix MAY skip the deprecation period when keeping the old behaviour would leave users exposed. The
+  upgrade notes say so.
+
+### 21.7 Tags and releases
+
+- **VER-11** A release is an annotated git tag `vX.Y.Z` (the `package.json` version with a `v` prefix) on a commit
+  on `main` where `CHANGELOG.md` has the dated heading for that version, plus a GitHub Release named `vX.Y.Z` whose
+  body is that version's CHANGELOG section. Mark release candidates as pre-releases. Tags are never moved or
+  deleted: a bad release is fixed by a new patch release.
+- **VER-12** Agents prepare releases but do not publish them on their own. The **release PR** only changes the
+  version's CHANGELOG heading from `Unreleased` to the release date. Agents create the tag and the GitHub Release
+  only when the maintainer explicitly asks for that release.
+- **VER-13** Installations run released versions. The README's install and upgrade steps check out a release tag,
+  not `main` (DEP-5, DEP-6, DEP-9), and tell operators to read the CHANGELOG upgrade notes and take a backup
+  before upgrading. Downgrading in place is not supported, because an app refuses a newer schema (DATA-4). The README
+  documents rolling back as: check out the previous tag, then restore the backup taken before the upgrade.
+
+## 22. Agent workflow
 
 - **WF-1** Branches: each app documents its branches in `AGENTS.md`. Branches that serve live instances
   (e.g. `staging`, `prod`) are never pushed to directly; changes arrive by reviewed PR.
@@ -1322,10 +1447,10 @@ Installation instructions assume Ubuntu 24.04 LTS or Debian 12/13. Both methods 
   need, stop and propose a spec change.
 - **WF-5** Before you finish: `npm run check` passes; new strings are translated into all locales; new
   routes have full schemas and appear in `/api/openapi.json`; new config keys are in the schema,
-  `config.example.yaml` and the README tables; new tables have a migration; the compliance checklist below
-  still holds.
+  `config.example.yaml` and the README tables; new tables have a migration; the version is bumped as §21 requires
+  and `CHANGELOG.md` has the entries (VER-8, VER-9); the compliance checklist below still holds.
 
-## 22. Compliance checklist
+## 23. Compliance checklist
 
 Use this list to review a new app or a large change. Every item must be true or listed as a deviation.
 
@@ -1351,11 +1476,13 @@ Use this list to review a new app or a large change. Every item must be true or 
 - [ ] All 10 locales complete for public and admin strings; no hard-coded UI text.
 - [ ] Docker Compose and systemd installs documented and working; healthcheck; non-root; hardened.
 - [ ] README sections per DOC-1; AGENTS.md per DOC-2 with deviations.
+- [ ] SemVer version in `package.json`, bumped in each PR (§21); `CHANGELOG.md` with upgrade notes for majors;
+      deprecations before removals; releases tagged `vX.Y.Z` with GitHub Releases; installs check out tags.
 
 ## Appendix A: Reference implementation deviations
 
 The AGT Event Calendar predates this spec and was brought into compliance afterwards. The deviations below are
-also listed in its `AGENTS.md`. They are kept on purpose. **Do not copy them into
+also listed in its `AGENTS.md`. Unless a row says "to fix", they are kept on purpose. **Do not copy them into
 other apps.**
 
 | Rule | Calendar today | Why |
@@ -1363,6 +1490,7 @@ other apps.**
 | NAME-2, CFG-2 | Env vars `AGT_SETUP_PASSWORD`, `AGT_CONFIG_FILE`, `AGT_STATIC_DIR` (no app segment); cookie `agt_session`; Compose service `calendar`, volume `calendar-data`; SQLite file `agt-calendar.sqlite` | Renaming would break existing `.env` files, sign everyone out and orphan the data volume. New apps use the spec names. |
 | CFG-5 | Backup/import limits live under `migration.*` | Operators may have them in `config.yaml`, and unknown keys stop the server. |
 | STACK-1 | Extra runtime dependency `papaparse` | Parses the legacy CSVs for Migrate from Amplify. |
+| §21 (VER-2, VER-9, VER-11, VER-13) | No `CHANGELOG.md` and no release tags yet; the admin dashboard doesn't show the version; the README installs and upgrades from `main` | **Not kept: to fix.** Added in spec 3.0.0. |
 
 Calendar-specific features that are **not** part of the standard: Migrate from Amplify (`server/migration.ts`,
 `src/lib/csv.ts`), legacy 4-hex event IDs, bookmarks, the national holidays and change log content types, the

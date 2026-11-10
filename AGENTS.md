@@ -11,7 +11,7 @@ write rarely, the data is small, and one process owns it. Deployment: Docker Com
 local systemd service on Ubuntu/Debian (`deploy/agt-event-calendar.service`); both are documented in `README.md`.
 
 This app follows, and is the reference implementation of, the
-**[AGT Web Application Specification](docs/agt-webapp-spec.md) v2.0.0**. Read it before changing architecture,
+**[AGT Web Application Specification](docs/agt-webapp-spec.md) v3.0.0**. Read it before changing architecture,
 API, security, UI or deployment. Where this app differs from the spec, see
 [Deviations](#deviations-from-the-agt-web-app-spec) below.
 
@@ -127,3 +127,4 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 | NAME-2, CFG-2 | Env vars `AGT_SETUP_PASSWORD`, `AGT_CONFIG_FILE`, `AGT_STATIC_DIR` (no `EVENT_CALENDAR` segment); session cookie `agt_session`; Compose service `calendar` and volume `calendar-data`; SQLite file `agt-calendar.sqlite` | Legacy names from before the spec. Renaming them would break existing `.env` files, sign everyone out and orphan the data volume. |
 | CFG-5 | Backup/import upload limits are under `migration.*` instead of `backup.*` | Operators may already set them in `config.yaml`; unknown keys stop the server. |
 | STACK-1 | Extra runtime dependency `papaparse` | Parses the legacy CSVs for Migrate from Amplify. |
+| §21 (VER-2, VER-9, VER-11, VER-13) | No `CHANGELOG.md` or release tags yet; the admin dashboard doesn't show the version; the README installs and upgrades from `main` | **Not intended: to fix.** Versioning rules were added in spec 3.0.0. |
