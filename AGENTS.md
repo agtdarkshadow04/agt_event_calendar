@@ -63,7 +63,7 @@ The Vite "chunks larger than 500 kB" warning on build is pre-existing and expect
 | `server/repository.ts` | All SQL queries |
 | `server/images.ts` | Image checks by magic bytes (PNG/JPEG/WebP/GIF, no SVG, ≤ 10 MB) and storage |
 | `server/migration.ts`, `server/zip.ts` | Migrate from Amplify (ZIP import) and safe ZIP reading |
-| `server/backup.ts` | Backup export / restore (never writes `config.yaml`); manifest checks (`parseManifest`) |
+| `server/backup.ts` | Backup export / restore (never writes `config.yaml`); manifest checks (`parseManifest`); restore steps, rollback and `restore-failed.json` (BAK-4, BAK-10, BAK-11) |
 | `server/dataWrite.ts` | Operation lock (`idle`/`backup`/`restore`/`restore_failed`), `withDataWrite()`, `503 maintenance`, job runner |
 | `server/altcha.ts`, `server/passwords.ts`, `server/session.ts` | Captcha, scrypt hashes, cookie sessions |
 | `server/test/` | `node:test` + Fastify `inject()`; `helpers.ts`; `fixtures/amplify-migration/` is the reference ZIP |

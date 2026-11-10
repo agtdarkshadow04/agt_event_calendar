@@ -4,7 +4,8 @@
  * `.env` is never included. Restore never writes config.yaml.
  */
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import type { FastifyBaseLogger } from 'fastify';
 import path from 'node:path';
 import { SETTING_KEYS } from './config';
 import type { AppContext } from './context';
@@ -13,9 +14,11 @@ import { ensureAltchaKey } from './altcha';
 import { missingTables, openDatabase, runMigrations, schemaVersion, SCHEMA_VERSION } from './db';
 import type { Db } from './db';
 import { asOperationOwner } from './dataWrite';
+import type { RecoverySession } from './dataWrite';
+import { HttpError } from './http';
 import { STORED_IMAGE_NAME, validateImage } from './images';
 import { parseStoredHash } from './passwords';
-import { setting } from './context';
+import { settingOrDefault } from './context';
 import { openSafeZip, writeZip, ZipRejectedError } from './zip';
 import Database from 'better-sqlite3';
 
@@ -181,6 +184,8 @@ export interface RestoreReport {
   droppedFiles: string[];
   config: { included: boolean; applied: false; text: string | null; identical: boolean; diff: string[] };
   preRestoreBackup: string | null;
+  /** Restore only: paths set aside that could not be deleted (BAK-4 step 6.2). Empty in a preview. */
+  warnings: string[];
 }
 
 export class RestoreRejectedError extends ZipRejectedError {}
@@ -217,8 +222,8 @@ interface StagedRestore {
 /** Validates a backup archive and stages it in a temporary directory. Nothing live is touched. */
 async function stageRestore(context: AppContext, zipPath: string): Promise<StagedRestore> {
   const zip = await openSafeZip(zipPath, {
-    maxEntries: setting(context, 'migration.maxEntries'),
-    maxUncompressedBytes: setting(context, 'migration.maxUncompressedBytes'),
+    maxEntries: settingOrDefault(context, 'migration.maxEntries'),
+    maxUncompressedBytes: settingOrDefault(context, 'migration.maxUncompressedBytes'),
   });
   const dir = tempDir(context, 'restore');
   try {
@@ -318,9 +323,7 @@ async function stageRestore(context: AppContext, zipPath: string): Promise<Stage
         if (isDefinedInConfig(context, key)) ignoredSettings.push({ key, reason: 'defined in the configuration file, which always wins' });
         else if (!(SETTING_KEYS as string[]).includes(key)) ignoredSettings.push({ key, reason: 'not a known setting' });
       }
-      const deleteSetting = db.prepare('DELETE FROM settings WHERE key = ?');
-      for (const { key } of ignoredSettings) deleteSetting.run(key);
-      db.prepare('DELETE FROM sessions').run();
+      // The ignored settings and the sessions are deleted when the restore commits (BAK-4 step 6.1).
 
       const count = (table: string) => (db.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n;
       const admin = db.prepare('SELECT username, password_hash FROM admin WHERE id = 1').get() as
@@ -347,6 +350,7 @@ async function stageRestore(context: AppContext, zipPath: string): Promise<Stage
           diff: configText !== null ? lineDiff(currentConfig, configText) : [],
         },
         preRestoreBackup: null,
+        warnings: [],
       };
       db.pragma('journal_mode = DELETE');
     } finally {
@@ -367,58 +371,190 @@ export async function previewRestore(context: AppContext, zipPath: string): Prom
   return staged.report;
 }
 
+/** `<dataDir>/restore-failed.json`: written when a restore's rollback fails; the server refuses to start while it exists (BAK-11). */
+export const RESTORE_FAILED_MARKER = 'restore-failed.json';
+
+export function restoreFailedMarkerPath(dataDir: string): string {
+  return path.join(dataDir, RESTORE_FAILED_MARKER);
+}
+
+export interface RestoreOptions {
+  /** Requests of the caller's own that the drain must not wait for (the restore request itself). */
+  ownActivity?: number;
+  /** The restoring admin's session, kept as the recovery session if the restore fails (BAK-11). */
+  session?: RecoverySession | null;
+  /** Server log for the rollback `error` and the cleanup `warn` (source `backup`). */
+  log?: FastifyBaseLogger;
+}
+
+/** Thrown when the restore failed but its rollback succeeded: nothing changed (BAK-10). */
+const rolledBack = () => new HttpError(500, 'internal', 'The restore failed and was rolled back. Nothing was changed.');
+/** Thrown when the app is left in `restore_failed` (BAK-11). */
+const staysInMaintenance = () => new HttpError(500, 'internal', 'The restore failed. The app stays in maintenance.');
+
 /**
- * Restores the database, uploads and dashboard settings. An automatic backup
- * of the current state is taken first, and files are swapped by renaming so
- * that a failure leaves the instance as it was. config.yaml is never written.
+ * Restores a backup (BAK-4): validate (step 1), take the `restore` lock and drain (2), write the pre-restore backup
+ * (3), swap the files (4), migrate and check (5), commit, clean up and release (6). From `restore_failed` this is the
+ * recovery restore of BAK-11: no pre-restore backup and no rollback. config.yaml is never written (BAK-5).
  */
-export async function restoreBackup(context: AppContext, zipPath: string, options: { ownActivity?: number } = {}): Promise<RestoreReport> {
+export async function restoreBackup(context: AppContext, zipPath: string, options: RestoreOptions = {}): Promise<RestoreReport> {
+  const recovery = context.operation.state === 'restore_failed';
   const staged = await stageRestore(context, zipPath);
   try {
-    return await context.operation.run('restore', () => swapIn(context, staged), options);
+    return await context.operation.run(
+      'restore',
+      () => (recovery ? applyRestore(context, staged, options, { recovery: true }) : applyRestore(context, staged, options, { recovery: false })),
+      { ownActivity: options.ownActivity, session: options.session, recovery },
+    );
   } finally {
     rmSync(staged.dir, { recursive: true, force: true });
   }
 }
 
-/** Replaces the live data with a staged restore. Runs in the `restore` state, after every request has drained. */
-async function swapIn(context: AppContext, staged: StagedRestore): Promise<RestoreReport> {
-  const preRestore = await createBackup(context, { keep: true, prefix: 'pre-restore-backup' });
-  staged.report.preRestoreBackup = path.basename(preRestore.path);
+/** The step 5 health check of BAK-4, also run after a rollback. Returns the first problem, or null. */
+export function restoredDataProblem(db: Db, uploadsDir: string): string | null {
+  const integrity = db.pragma('integrity_check', { simple: true });
+  if (integrity !== 'ok') return `the integrity check failed: ${String(integrity)}`;
+  if ((db.pragma('foreign_key_check') as unknown[]).length > 0) return 'there are broken references between tables';
+  const version = schemaVersion(db);
+  if (version !== SCHEMA_VERSION) return `the schema version is ${version}, not ${SCHEMA_VERSION}`;
+  const missing = missingTables(db);
+  if (missing.length > 0) return `tables are missing: ${missing.join(', ')}`;
+  for (const { file_name: fileName } of db.prepare('SELECT file_name FROM images').all() as { file_name: string }[]) {
+    if (!existsSync(path.join(uploadsDir, fileName))) return `uploads/${fileName} is missing`;
+  }
+  return null;
+}
 
-  const { databaseFile, uploadsDir } = context.config;
-  const suffix = `.before-restore-${randomUUID()}`;
-  const oldDb = `${databaseFile}${suffix}`;
-  const oldUploads = `${uploadsDir}${suffix}`;
-  context.db.pragma('wal_checkpoint(TRUNCATE)');
-  context.db.close();
-  const moved: [string, string][] = [];
-  const move = (from: string, to: string) => {
-    renameSync(from, to);
-    moved.push([from, to]);
-  };
+function closeLiveDatabase(context: AppContext): void {
+  if (!context.db.open) return;
   try {
+    context.db.pragma('wal_checkpoint(TRUNCATE)');
+  } finally {
+    context.db.close();
+  }
+}
+
+async function applyRestore(
+  context: AppContext,
+  staged: StagedRestore,
+  options: RestoreOptions,
+  mode: { recovery: boolean },
+): Promise<RestoreReport> {
+  const lock = context.operation;
+  const hooks = lock.restoreHooks;
+  const { databaseFile, uploadsDir } = context.config;
+
+  // Step 3. The recovery restore skips it: the live data is the half-restored data.
+  if (!mode.recovery) {
+    const preRestore = await createBackup(context, { keep: true, prefix: 'pre-restore-backup' });
+    staged.report.preRestoreBackup = path.basename(preRestore.path);
+    lock.preRestoreBackup = staged.report.preRestoreBackup;
+  }
+
+  // Step 4: prepare the new files beside the live ones, then swap. Set-aside names never collide (BAK-4).
+  const stamp = timestamp();
+  const paths = {
+    newDb: `${databaseFile}.restore-new-${stamp}`,
+    newUploads: `${uploadsDir}.restore-new-${stamp}`,
+    oldDb: `${databaseFile}.restore-old-${stamp}`,
+    oldUploads: `${uploadsDir}.restore-old-${stamp}`,
+  };
+  const setAside = { db: false, uploads: false };
+  try {
+    copyFileSync(staged.databaseFile, paths.newDb);
+    cpSync(staged.uploadsDir, paths.newUploads, { recursive: true });
+    closeLiveDatabase(context);
+    // After the TRUNCATE checkpoint the WAL is empty; the main file holds everything.
     for (const extra of ['-wal', '-shm']) rmSync(`${databaseFile}${extra}`, { force: true });
-    if (existsSync(databaseFile)) move(databaseFile, oldDb);
-    if (existsSync(uploadsDir)) move(uploadsDir, oldUploads);
-    move(staged.databaseFile, databaseFile);
-    move(staged.uploadsDir, uploadsDir);
+    if (existsSync(databaseFile)) { renameSync(databaseFile, paths.oldDb); setAside.db = true; }
+    if (existsSync(uploadsDir)) { renameSync(uploadsDir, paths.oldUploads); setAside.uploads = true; }
+    renameSync(paths.newDb, databaseFile);
+    renameSync(paths.newUploads, uploadsDir);
+    // Step 5: pending migrations run on open, then the health check.
     context.db = openDatabase(databaseFile);
+    await hooks.afterSwap?.();
+    const problem = restoredDataProblem(context.db, uploadsDir);
+    if (problem) throw new Error(`The restored data failed the health check: ${problem}.`);
+    // Step 6.1: commit, in one transaction on the restored data.
+    const db = context.db;
+    db.transaction(() => {
+      const deleteSetting = db.prepare('DELETE FROM settings WHERE key = ?');
+      for (const { key } of staged.report.ignoredSettings) deleteSetting.run(key);
+      db.prepare('DELETE FROM sessions').run();
+      hooks.inCommit?.();
+    })();
   } catch (error) {
-    for (const [from, to] of moved.reverse()) {
-      try {
-        rmSync(from, { recursive: true, force: true });
-        renameSync(to, from);
-      } catch {
-        // Best effort; the pre-restore backup still exists.
-      }
+    const cause = (error as Error).message;
+    if (mode.recovery) {
+      // Nothing to roll back to: the state stays restore_failed, with the marker and the recovery session (BAK-11).
+      lock.markFailed();
+      options.log?.error({ source: 'backup', preRestoreBackup: lock.preRestoreBackup }, `The recovery restore failed: ${cause}`);
+      throw staysInMaintenance();
     }
-    context.db = openDatabase(databaseFile);
-    throw error;
+    rollBack(context, paths, setAside, options, cause);
+    throw rolledBack();
+  }
+
+  // Step 6.2: clean up. The restored data is live and checked, so failures are warnings only.
+  const warnings: string[] = [];
+  for (const leftover of [paths.oldDb, paths.oldUploads, paths.newDb, paths.newUploads]) {
+    if (!existsSync(leftover)) continue;
+    try {
+      hooks.cleanup?.(leftover);
+      rmSync(leftover, { recursive: true, force: true });
+    } catch (error) {
+      warnings.push(`${leftover} could not be deleted (${(error as Error).message}). Delete it by hand once you have checked the restored data.`);
+    }
+  }
+  if (warnings.length > 0) {
+    options.log?.warn({ source: 'backup', paths: warnings.length }, `The restore succeeded, but ${warnings.length} set-aside path(s) could not be deleted: ${warnings.join(' ')}`);
   }
   // Restored data from before generated secrets existed gets its own key (ALT-2).
   asOperationOwner(() => ensureAltchaKey(context.db));
-  rmSync(oldDb, { force: true });
-  rmSync(oldUploads, { recursive: true, force: true });
-  return staged.report;
+  // A successful restore ends any failed state (BAK-11); the lock clears the recovery session when it returns to idle.
+  rmSync(restoreFailedMarkerPath(context.config.dataDir), { force: true });
+  return { ...staged.report, warnings };
+}
+
+/** BAK-10: put the set-aside files back, reopen and re-check. If that fails too, the app stays in maintenance (BAK-11). */
+function rollBack(
+  context: AppContext,
+  paths: { newDb: string; newUploads: string; oldDb: string; oldUploads: string },
+  setAside: { db: boolean; uploads: boolean },
+  options: RestoreOptions,
+  cause: string,
+): void {
+  const lock = context.operation;
+  const { databaseFile, uploadsDir } = context.config;
+  try {
+    if (context.db.open) context.db.close();
+    if (setAside.db) {
+      for (const extra of ['', '-wal', '-shm']) rmSync(`${databaseFile}${extra}`, { force: true });
+      renameSync(paths.oldDb, databaseFile);
+    }
+    if (setAside.uploads) {
+      rmSync(uploadsDir, { recursive: true, force: true });
+      renameSync(paths.oldUploads, uploadsDir);
+    }
+    rmSync(paths.newDb, { force: true });
+    rmSync(paths.newUploads, { recursive: true, force: true });
+    lock.restoreHooks.rollback?.();
+    context.db = openDatabase(databaseFile);
+    const problem = restoredDataProblem(context.db, uploadsDir);
+    if (problem) throw new Error(`the data after the rollback failed the health check: ${problem}`);
+  } catch (rollbackError) {
+    const reason = (rollbackError as Error).message;
+    lock.markFailed();
+    const marker = { preRestoreBackup: lock.preRestoreBackup, failedAt: new Date().toISOString() };
+    try {
+      writeFileSync(restoreFailedMarkerPath(context.config.dataDir), `${JSON.stringify(marker, null, 2)}\n`);
+    } catch {
+      // The server log entry below still names the pre-restore backup.
+    }
+    options.log?.error({ source: 'backup', preRestoreBackup: lock.preRestoreBackup, cause, rollbackError: reason },
+      `The restore failed (${cause}) and so did its rollback (${reason}). The app stays in maintenance. Restore the pre-restore backup ${lock.preRestoreBackup ?? '(none)'} as described in the README (Troubleshooting).`);
+    throw staysInMaintenance();
+  }
+  options.log?.error({ source: 'backup', cause }, `The restore failed and was rolled back: ${cause}`);
 }

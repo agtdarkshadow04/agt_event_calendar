@@ -2,7 +2,9 @@
  * Server log entries written at startup (AGT web app spec LOG-8, AUTH-6). Kept
  * out of index.ts so tests can check them.
  */
+import { existsSync, readFileSync } from 'node:fs';
 import type { FastifyBaseLogger } from 'fastify';
+import { restoreFailedMarkerPath } from './backup';
 import type { AppContext } from './context';
 import { SCHEMA_VERSION } from './db';
 import type { Migration } from './db';
@@ -16,6 +18,24 @@ export interface StartupInfo {
   logMigrations: Migration[];
   /** The address the server listens on. */
   address: string;
+}
+
+/**
+ * BAK-11: while `<dataDir>/restore-failed.json` exists, a restore failed and so did its rollback. The server refuses
+ * to start (SRV-8) until the operator has restored the data by hand and deleted the marker.
+ */
+export function restoreFailedError(dataDir: string): string | null {
+  const marker = restoreFailedMarkerPath(dataDir);
+  if (!existsSync(marker)) return null;
+  let backup = 'the pre-restore backup';
+  try {
+    const parsed = JSON.parse(readFileSync(marker, 'utf8')) as { preRestoreBackup?: unknown };
+    if (typeof parsed.preRestoreBackup === 'string') backup = `the pre-restore backup ${parsed.preRestoreBackup}`;
+  } catch {
+    // An unreadable marker still means the restore failed.
+  }
+  return `A restore failed and its rollback failed too (${marker}). Restore ${backup} by hand as described in the README `
+    + '(Troubleshooting: "A restore failed and the app stays in maintenance"), then delete the marker file and start the server again.';
 }
 
 /** The longest setup password, in Unicode code points as read from the environment (AUTH-5). */

@@ -51,6 +51,19 @@ export function settingStates(context: AppContext): SettingState[] {
   });
 }
 
+/**
+ * A setting that must be readable even when the live database is unusable (a failed restore, BAK-11): falls back to
+ * the config file, then the default.
+ */
+export function settingOrDefault<K extends SettingKey>(context: AppContext, key: K): (typeof EDITABLE_SETTINGS)[K]['default'] {
+  try {
+    return setting(context, key);
+  } catch {
+    const fromFile = getFileValue(context.config.file, key);
+    return (fromFile ?? EDITABLE_SETTINGS[key].default) as (typeof EDITABLE_SETTINGS)[K]['default'];
+  }
+}
+
 export function setting<K extends SettingKey>(context: AppContext, key: K): (typeof EDITABLE_SETTINGS)[K]['default'] {
   return settingStates(context).find((state) => state.key === key)!.value as (typeof EDITABLE_SETTINGS)[K]['default'];
 }

@@ -3,6 +3,7 @@
 import type { Locale } from '../translations';
 
 const en = {
+  restoreLeftovers: 'Some files set aside by the restore could not be deleted; delete them by hand: {{paths}}',
   maintenanceNotice: 'Maintenance in progress. Retrying in a moment…',
   appVersion: 'Version {{version}}',
   title: 'Admin dashboard',
@@ -176,6 +177,7 @@ const en = {
 export type AdminTranslations = { [Key in keyof typeof en]: string };
 
 const fr: AdminTranslations = {
+  restoreLeftovers: 'Certains fichiers mis de côté par la restauration n’ont pas pu être supprimés ; supprimez-les à la main : {{paths}}',
   maintenanceNotice: 'Maintenance en cours. Nouvelle tentative dans un instant…',
   appVersion: 'Version {{version}}',
   title: 'Tableau de bord d’administration',
@@ -347,6 +349,7 @@ const fr: AdminTranslations = {
 };
 
 const de: AdminTranslations = {
+  restoreLeftovers: 'Einige von der Wiederherstellung beiseitegelegte Dateien konnten nicht gelöscht werden; löschen Sie sie von Hand: {{paths}}',
   maintenanceNotice: 'Wartung läuft. Neuer Versuch in Kürze…',
   appVersion: 'Version {{version}}',
   title: 'Admin-Dashboard',
@@ -518,6 +521,7 @@ const de: AdminTranslations = {
 };
 
 const es: AdminTranslations = {
+  restoreLeftovers: 'No se pudieron eliminar algunos archivos apartados por la restauración; elimínalos a mano: {{paths}}',
   maintenanceNotice: 'Mantenimiento en curso. Reintentando en un momento…',
   appVersion: 'Versión {{version}}',
   title: 'Panel de administración',
@@ -689,6 +693,7 @@ const es: AdminTranslations = {
 };
 
 const pt: AdminTranslations = {
+  restoreLeftovers: 'Alguns arquivos deixados de lado pela restauração não puderam ser excluídos; exclua-os manualmente: {{paths}}',
   maintenanceNotice: 'Manutenção em andamento. Tentando novamente em instantes…',
   appVersion: 'Versão {{version}}',
   title: 'Painel de administração',
@@ -860,6 +865,7 @@ const pt: AdminTranslations = {
 };
 
 const it: AdminTranslations = {
+  restoreLeftovers: 'Alcuni file messi da parte dal ripristino non sono stati eliminati; eliminali a mano: {{paths}}',
   maintenanceNotice: 'Manutenzione in corso. Nuovo tentativo tra un momento…',
   appVersion: 'Versione {{version}}',
   title: 'Pannello di amministrazione',
@@ -1031,6 +1037,7 @@ const it: AdminTranslations = {
 };
 
 const th: AdminTranslations = {
+  restoreLeftovers: 'ไม่สามารถลบไฟล์บางไฟล์ที่การกู้คืนพักไว้ได้ โปรดลบด้วยตนเอง: {{paths}}',
   maintenanceNotice: 'กำลังปรับปรุงระบบ จะลองใหม่อีกครั้งในอีกสักครู่…',
   appVersion: 'เวอร์ชัน {{version}}',
   title: 'แดชบอร์ดผู้ดูแลระบบ',
@@ -1202,6 +1209,7 @@ const th: AdminTranslations = {
 };
 
 const zh: AdminTranslations = {
+  restoreLeftovers: '恢复时暂存的部分文件无法删除，请手动删除：{{paths}}',
   maintenanceNotice: '正在维护中，稍后将自动重试…',
   appVersion: '版本 {{version}}',
   title: '管理后台',
@@ -1373,6 +1381,7 @@ const zh: AdminTranslations = {
 };
 
 const hi: AdminTranslations = {
+  restoreLeftovers: 'रिस्टोर द्वारा अलग रखी गई कुछ फ़ाइलें हटाई नहीं जा सकीं; उन्हें स्वयं हटाएँ: {{paths}}',
   maintenanceNotice: 'रखरखाव जारी है। कुछ ही क्षणों में फिर से प्रयास किया जाएगा…',
   appVersion: 'संस्करण {{version}}',
   title: 'व्यवस्थापक डैशबोर्ड',
@@ -1544,6 +1553,7 @@ const hi: AdminTranslations = {
 };
 
 const ja: AdminTranslations = {
+  restoreLeftovers: '復元で退避した一部のファイルを削除できませんでした。手動で削除してください: {{paths}}',
   maintenanceNotice: 'メンテナンス中です。まもなく再試行します…',
   appVersion: 'バージョン {{version}}',
   title: '管理ダッシュボード',

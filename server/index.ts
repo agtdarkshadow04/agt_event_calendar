@@ -9,7 +9,7 @@ import { openDatabase } from './db';
 import type { Migration } from './db';
 import { LogStore, createLogger } from './logs';
 import { getAdmin } from './repository';
-import { logStartup, readSetupPassword } from './startup';
+import { logStartup, readSetupPassword, restoreFailedError } from './startup';
 
 function appVersion(root: string): string {
   try {
@@ -32,6 +32,12 @@ async function main() {
       process.exit(1);
     }
     throw error;
+  }
+
+  const restoreFailed = restoreFailedError(config.dataDir);
+  if (restoreFailed) {
+    console.error(`Refusing to start: ${restoreFailed}`);
+    process.exit(1);
   }
 
   const logMigrations: Migration[] = [];
