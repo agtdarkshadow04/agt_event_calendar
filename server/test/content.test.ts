@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
+import { asOperationOwner } from '../dataWrite';
 import { insertEvent } from '../repository';
 import { CONTENT_SECURITY_POLICY } from '../app';
 import { CSRF, createTestServer, setupAdmin, validEvent } from './helpers';
@@ -65,9 +66,10 @@ describe('events API', () => {
 
   it('resolves legacy 4-hex IDs to the migrated event and never reissues them', async () => {
     const { app, context } = await adminServer();
-    const id = insertEvent(context.db, {
+    // Migrate from Amplify is the only writer of legacy IDs; seed one directly, as a data write.
+    const id = asOperationOwner(() => insertEvent(context.db, {
       ...validEvent, end: null, civilization: null, description: null, planet: null, start: '2030-01-01T18:00:00.000Z',
-    }, { status: 'published', legacyId: '8000' });
+    }, { status: 'published', legacyId: '8000' }));
     const byLegacy = await app.inject({ method: 'GET', url: '/api/events/8000' });
     assert.equal(byLegacy.statusCode, 200);
     assert.equal(byLegacy.json().id, id);
@@ -75,9 +77,9 @@ describe('events API', () => {
     assert.equal((await app.inject({ method: 'GET', url: '/api/events/abcd' })).statusCode, 404);
     assert.equal((await app.inject({ method: 'GET', url: `/api/events/${id.toUpperCase()}` })).json().id, id);
     assert.equal((await app.inject({ method: 'GET', url: '/api/events/not-an-id' })).statusCode, 404);
-    assert.throws(() => insertEvent(context.db, {
+    assert.throws(() => asOperationOwner(() => insertEvent(context.db, {
       ...validEvent, end: null, civilization: null, description: null, planet: null,
-    }, { status: 'published', legacyId: '8000' }), /UNIQUE/);
+    }, { status: 'published', legacyId: '8000' })), /UNIQUE/);
   });
 });
 

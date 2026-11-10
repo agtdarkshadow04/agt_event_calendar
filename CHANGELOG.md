@@ -38,6 +38,14 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
   another host ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
 - The `AGT_SERVER_HOST` environment variable sets the listen address when `server.host` is not in `config.yaml`;
   the Docker image sets `0.0.0.0` ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
+- An operation lock for backups and restores. A backup waits for the changes in progress and holds new ones until
+  its snapshot of the database and uploads is done; a restore waits for every request in progress. Either gives
+  `409 conflict` if one is already running, or if the server is still busy after 30 seconds
+  ([#61](https://github.com/agtdarkshadow04/agt_event_calendar/issues/61)).
+- `503 maintenance` with `Retry-After: 10` and `params.retryAfterSeconds`: for every API request during a restore, and
+  for a change that waited more than 30 seconds for a backup. `GET /api/health` returns `{ "status": "maintenance" }`
+  during a restore. The calendar and the dashboard show a non-blocking "Maintenance in progress" notice and retry the
+  request once ([#61](https://github.com/agtdarkshadow04/agt_event_calendar/issues/61)).
 - `package.json` approves the install scripts of `better-sqlite3` and `esbuild` in `allowScripts`, so `npm ci` behaves
   the same with npm 11.20 and newer ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
 
@@ -48,6 +56,10 @@ The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.
   ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
 - Build tools: TypeScript 7.0, Vite 8.3, `@vitejs/plugin-react` 6.3 and esbuild 0.28
   ([#59](https://github.com/agtdarkshadow04/agt_event_calendar/issues/59)).
+- Restore checks the backup manifest exactly: the six fields and their types, a format version from 1 up to this
+  app's, safe relative paths, no duplicates, and every archive entry listed. The preview, and the restore itself,
+  also reject a backup whose admin password hash fails the password-hash check
+  ([#61](https://github.com/agtdarkshadow04/agt_event_calendar/issues/61)).
 - The captcha key is generated at startup, and after a restore whose data has none, instead of by the first captcha
   request ([#60](https://github.com/agtdarkshadow04/agt_event_calendar/issues/60)).
 - While no admin exists, an `AGT_SETUP_PASSWORD` longer than 1024 characters stops the server with a clear message

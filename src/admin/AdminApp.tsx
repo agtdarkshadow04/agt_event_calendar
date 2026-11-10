@@ -14,6 +14,7 @@ import { ImagesPanel } from './ImagesPanel';
 import { MigratePanel } from './MigratePanel';
 import { ServerLogPanel } from './ServerLogPanel';
 import { SettingsPanel } from './SettingsPanel';
+import { MaintenanceNotice } from '../components/MaintenanceNotice';
 
 type Phase =
   | { kind: 'loading' }
@@ -263,6 +264,7 @@ export function AdminApp() {
             )}
           </div>
         </header>
+        <MaintenanceNotice className="admin-notice maintenance-notice" text={t.maintenanceNotice} />
         <main className="admin-main">
           {phase.kind === 'loading' && <p className="loading-note" role="status">{t.loading}</p>}
           {phase.kind === 'error' && <p className="error-note" role="alert">{formatError(t.requestFailed, phase.message)}</p>}

@@ -1,4 +1,5 @@
 import type { ApiErrorBody } from './api';
+import { withMaintenanceRetry } from './maintenance';
 
 /** Error thrown for non-2xx API responses, carrying the server's message. */
 export class ApiError extends Error {
@@ -42,14 +43,15 @@ export async function apiRequest<T>(
   const headers: Record<string, string> = { Accept: 'application/json', ...CLIENT_HEADERS };
   if (init.json !== undefined) headers['Content-Type'] = 'application/json';
   if (init.csrf ?? (init.method !== undefined && init.method !== 'GET')) Object.assign(headers, CSRF_HEADERS);
-  const response = await fetch(path, {
+  // `503 maintenance` is retried once after Retry-After (FE-5); the request never reached its handler.
+  const response = await withMaintenanceRetry(() => fetch(path, {
     method: init.method ?? 'GET',
     cache: 'no-store',
     credentials: 'same-origin',
     headers,
     signal: init.signal,
     body: init.json !== undefined ? JSON.stringify(init.json) : init.body,
-  });
+  }), init.signal);
   const text = await response.text();
   let data: unknown = null;
   try {
@@ -72,7 +74,9 @@ export function attachmentFileName(header: string | null, fallback: string): str
 
 /** Downloads a file from the API (with the same headers as `apiRequest()`), returning its contents and name. */
 export async function apiDownload(path: string, fallbackName: string): Promise<{ blob: Blob; fileName: string }> {
-  const response = await fetch(path, { cache: 'no-store', credentials: 'same-origin', headers: { ...CLIENT_HEADERS } });
+  const response = await withMaintenanceRetry(
+    () => fetch(path, { cache: 'no-store', credentials: 'same-origin', headers: { ...CLIENT_HEADERS } }),
+  );
   if (!response.ok) throw await errorFrom(response);
   return { blob: await response.blob(), fileName: attachmentFileName(response.headers.get('Content-Disposition'), fallbackName) };
 }

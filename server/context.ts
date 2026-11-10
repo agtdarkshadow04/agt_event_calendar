@@ -1,6 +1,7 @@
 import { Value } from '@sinclair/typebox/value';
 import { EDITABLE_SETTINGS, SETTING_KEYS, getFileValue } from './config';
 import type { ResolvedConfig, SettingKey } from './config';
+import type { OperationLock } from './dataWrite';
 import type { Db } from './db';
 import type { LogStore } from './logs';
 import { getSettingRows } from './repository';
@@ -14,6 +15,8 @@ export interface AppContext {
   /** `AGT_SETUP_PASSWORD` from the environment; used only while no admin exists. */
   setupPassword: string | null;
   version: string;
+  /** The backup/restore operation lock and data-write barrier (BAK-8). */
+  operation: OperationLock;
 }
 
 export type SettingSource = 'config' | 'dashboard' | 'default';

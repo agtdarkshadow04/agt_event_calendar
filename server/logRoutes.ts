@@ -62,6 +62,7 @@ export function registerLogRoutes(fastify: FastifyInstance, context: AppContext)
   // ------------------------------------------------------------- server log
 
   app.get('/api/admin/logs/server', {
+    config: { writesData: false },
     schema: {
       operationId: 'listServerLog', tags: ['logs'], summary: 'Lists server log entries, newest first.',
       security: SECURITY.adminRead,
@@ -72,7 +73,7 @@ export function registerLogRoutes(fastify: FastifyInstance, context: AppContext)
     context.logs.listServer(serverFilters(request.query), request.query.limit ?? 50, cursorFrom(request.query.cursor)));
 
   app.get('/api/admin/logs/server/export', {
-    config: { audit: true },
+    config: { writesData: false, audit: true },
     schema: {
       operationId: 'exportServerLog', tags: ['logs'], summary: 'Downloads the filtered server log as JSON Lines or CSV.',
       security: SECURITY.adminRead,
@@ -87,6 +88,7 @@ export function registerLogRoutes(fastify: FastifyInstance, context: AppContext)
   });
 
   app.get('/api/admin/logs/server/summary', {
+    config: { writesData: false },
     schema: {
       operationId: 'getServerLogSummary', tags: ['logs'],
       summary: 'Counts the warnings and errors written since the server log was last opened.',
@@ -96,6 +98,7 @@ export function registerLogRoutes(fastify: FastifyInstance, context: AppContext)
   }, async () => context.logs.serverSummary());
 
   app.post('/api/admin/logs/server/seen', {
+    config: { writesData: false },
     schema: {
       operationId: 'markServerLogSeen', tags: ['logs'], summary: 'Marks every server log entry written so far as seen.',
       security: SECURITY.adminWrite,
@@ -108,6 +111,7 @@ export function registerLogRoutes(fastify: FastifyInstance, context: AppContext)
   });
 
   app.delete('/api/admin/logs/server', {
+    config: { writesData: false },
     schema: {
       operationId: 'clearServerLog', tags: ['logs'], summary: 'Deletes every server log entry. The audit log cannot be cleared.',
       security: SECURITY.adminWrite,
@@ -122,6 +126,7 @@ export function registerLogRoutes(fastify: FastifyInstance, context: AppContext)
   // ------------------------------------------------------------- audit log
 
   app.get('/api/admin/logs/audit', {
+    config: { writesData: false },
     schema: {
       operationId: 'listAuditLog', tags: ['logs'], summary: 'Lists audit log entries, newest first.',
       security: SECURITY.adminRead,
@@ -132,7 +137,7 @@ export function registerLogRoutes(fastify: FastifyInstance, context: AppContext)
     context.logs.listAudit(auditFilters(request.query), request.query.limit ?? 50, cursorFrom(request.query.cursor)));
 
   app.get('/api/admin/logs/audit/export', {
-    config: { audit: true },
+    config: { writesData: false, audit: true },
     schema: {
       operationId: 'exportAuditLog', tags: ['logs'], summary: 'Downloads the filtered audit log as JSON Lines or CSV.',
       security: SECURITY.adminRead,

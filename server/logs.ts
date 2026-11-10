@@ -561,12 +561,19 @@ export function runRetention(context: AppContext, log: FastifyBaseLogger, now = 
 
 export const RETENTION_INTERVAL_MS = 60 * 60 * 1000;
 
-/** Runs retention when the app is ready and then every hour, without keeping the process alive. */
+/** The retention job writes only the log store, so it is not a data write (BAK-8). */
+export const RETENTION_JOB = { name: 'logRetention', writesData: false } as const;
+
+/**
+ * Runs retention when the app is ready and then every hour, without keeping the process alive. It is counted by the
+ * operation lock and paused during a restore (BAK-8).
+ */
 export function scheduleRetention(app: FastifyInstance, context: AppContext): void {
   let timer: NodeJS.Timeout | null = null;
+  const run = () => void context.operation.runJob(RETENTION_JOB, () => runRetention(context, app.log));
   app.addHook('onReady', async () => {
-    runRetention(context, app.log);
-    timer = setInterval(() => runRetention(context, app.log), RETENTION_INTERVAL_MS);
+    run();
+    timer = setInterval(run, RETENTION_INTERVAL_MS);
     timer.unref();
   });
   app.addHook('onClose', async () => {

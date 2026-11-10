@@ -13,6 +13,8 @@ export class HttpError extends Error {
     readonly code: string,
     message: string,
     readonly fields?: FieldError[],
+    /** Values the message needs, e.g. `{ retryAfterSeconds }` (API-6). */
+    readonly params?: Record<string, string | number | boolean>,
   ) {
     super(message);
   }

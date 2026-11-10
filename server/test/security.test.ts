@@ -7,6 +7,7 @@ import { createChallenge, solveChallenge } from 'altcha-lib';
 import { deriveKey } from 'altcha-lib/algorithms/sha';
 import { DEFAULT_HOST, parseConfigText, resolveConfig } from '../config';
 import type { AppContext } from '../context';
+import { OperationLock } from '../dataWrite';
 import { openDatabase } from '../db';
 import { isLoopbackAddress } from '../http';
 import { LogStore, createLogger } from '../logs';
@@ -215,6 +216,7 @@ describe('ALTCHA key (ALT-2, SEC-8)', () => {
       const config = resolveConfig(parseConfigText(`altcha:\n  hmacKey: ${configured}\n`), 'x', path.join(dir, 'config.yaml'), dir);
       const context: AppContext = {
         config, db: openDatabase(config.databaseFile), logs: LogStore.open(config.logDatabaseFile), setupPassword: null, version: 'test',
+        operation: new OperationLock(),
       };
       logStartup(createLogger(context.logs, 'silent', null), context, { migrations: [], logMigrations: [], address: 'http://127.0.0.1:8080' });
       const warning = context.logs.listServer({ source: 'config' }, 50).items.find((entry) => /hmacKey/.test(entry.message));

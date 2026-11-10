@@ -251,6 +251,10 @@
   line-height: 1.6;
 }
 
+.admin-notice.maintenance-notice {
+  margin: 0 clamp(0.75rem, 3vw, 2rem);
+}
+
 .admin-notice.danger {
   border-color: var(--line-strong);
   color: #ff6b5e;

@@ -12,7 +12,9 @@ import { isDefinedInConfig } from './context';
 import { ensureAltchaKey } from './altcha';
 import { missingTables, openDatabase, runMigrations, schemaVersion, SCHEMA_VERSION } from './db';
 import type { Db } from './db';
+import { asOperationOwner } from './dataWrite';
 import { STORED_IMAGE_NAME, validateImage } from './images';
+import { parseStoredHash } from './passwords';
 import { setting } from './context';
 import { openSafeZip, writeZip, ZipRejectedError } from './zip';
 import Database from 'better-sqlite3';
@@ -30,6 +32,62 @@ export interface BackupManifest {
 }
 
 const sha256 = (data: Buffer | string) => createHash('sha256').update(data).digest('hex');
+
+const MANIFEST_FIELDS = ['format', 'formatVersion', 'appVersion', 'schemaVersion', 'createdAt', 'files'];
+const FILE_FIELDS = ['path', 'size', 'sha256'];
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$/;
+
+/** A relative POSIX path: `/` separators, no leading `/`, no empty, `.` or `..` segments, no backslashes (BAK-2). */
+export function isSafeArchivePath(value: string): boolean {
+  if (value === '' || value.startsWith('/') || value.includes('\\') || value.includes('\0')) return false;
+  return value.split('/').every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+}
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+const hasExactly = (value: Record<string, unknown>, fields: string[]) =>
+  Object.keys(value).length === fields.length && fields.every((field) => Object.hasOwn(value, field));
+
+/**
+ * Checks `manifest.json` against BAK-2 and BAK-7: exactly the six fields with their types, a `formatVersion` this
+ * app can read, and one `{ path, size, sha256 }` per file with a safe, unique path.
+ */
+export function parseManifest(value: unknown): BackupManifest {
+  if (!isObject(value) || value.format !== BACKUP_FORMAT) {
+    throw new RestoreRejectedError('manifest.json is not an AGT Event Calendar backup manifest.');
+  }
+  if (!Number.isInteger(value.formatVersion) || (value.formatVersion as number) < 1) {
+    throw new RestoreRejectedError('manifest.json has an invalid formatVersion.');
+  }
+  if ((value.formatVersion as number) > BACKUP_FORMAT_VERSION) {
+    throw new RestoreRejectedError(`The backup format version ${String(value.formatVersion)} is newer than this application supports (${BACKUP_FORMAT_VERSION}).`);
+  }
+  if (!hasExactly(value, MANIFEST_FIELDS)) {
+    throw new RestoreRejectedError(`manifest.json must have exactly the fields ${MANIFEST_FIELDS.join(', ')}.`);
+  }
+  if (typeof value.appVersion !== 'string' || value.appVersion === '') throw new RestoreRejectedError('manifest.json has an invalid appVersion.');
+  if (!Number.isInteger(value.schemaVersion) || (value.schemaVersion as number) < 1) {
+    throw new RestoreRejectedError('manifest.json has an invalid schemaVersion.');
+  }
+  if (typeof value.createdAt !== 'string' || !ISO_UTC.test(value.createdAt) || Number.isNaN(Date.parse(value.createdAt))) {
+    throw new RestoreRejectedError('manifest.json has an invalid createdAt.');
+  }
+  if (!Array.isArray(value.files)) throw new RestoreRejectedError('manifest.json has no files list.');
+  const paths = new Set<string>();
+  for (const file of value.files as unknown[]) {
+    if (!isObject(file) || !hasExactly(file, FILE_FIELDS) || typeof file.path !== 'string'
+      || !Number.isSafeInteger(file.size) || (file.size as number) < 0
+      || typeof file.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(file.sha256)) {
+      throw new RestoreRejectedError('manifest.json has an invalid files entry.');
+    }
+    if (!isSafeArchivePath(file.path) || file.path === 'manifest.json') {
+      throw new RestoreRejectedError(`manifest.json lists an unsafe path: ${file.path}`);
+    }
+    if (paths.has(file.path)) throw new RestoreRejectedError(`manifest.json lists ${file.path} twice.`);
+    paths.add(file.path);
+  }
+  return value as unknown as BackupManifest;
+}
 
 function timestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, '-');
@@ -98,6 +156,14 @@ export async function createBackup(context: AppContext, options: { keep?: boolea
   }
 }
 
+/**
+ * The backup download: the whole snapshot (database and uploads) is taken in the `backup` state, after the data
+ * writes in progress have drained, so no write lands between the two (BAK-8, BAK-9).
+ */
+export function downloadBackup(context: AppContext): Promise<{ path: string; fileName: string }> {
+  return context.operation.run('backup', () => createBackup(context));
+}
+
 /** Removes the temporary directory a non-kept backup was written to. */
 export function discardBackup(backupPath: string): void {
   const dir = path.dirname(backupPath);
@@ -158,6 +224,9 @@ async function stageRestore(context: AppContext, zipPath: string): Promise<Stage
   try {
     const byName = new Map(zip.entries.filter((entry) => !entry.isDirectory).map((entry) => [entry.name, entry]));
     for (const entry of zip.entries) {
+      if (!isSafeArchivePath(entry.isDirectory ? entry.name.replace(/\/$/, '') : entry.name)) {
+        throw new RestoreRejectedError(`The backup contains an unsafe path: ${entry.name}`);
+      }
       const allowed = entry.isDirectory
         ? entry.name === 'uploads/'
         : ['manifest.json', 'database.sqlite', 'config.yaml'].includes(entry.name) ||
@@ -166,18 +235,13 @@ async function stageRestore(context: AppContext, zipPath: string): Promise<Stage
     }
     const manifestEntry = byName.get('manifest.json');
     if (!manifestEntry) throw new RestoreRejectedError('The backup has no manifest.json.');
-    let manifest: BackupManifest;
+    let parsed: unknown;
     try {
-      manifest = JSON.parse((await zip.read(manifestEntry, 10 * 1024 * 1024)).toString('utf8')) as BackupManifest;
+      parsed = JSON.parse((await zip.read(manifestEntry, 10 * 1024 * 1024)).toString('utf8'));
     } catch {
       throw new RestoreRejectedError('manifest.json is not valid JSON.');
     }
-    if (manifest.format !== BACKUP_FORMAT || !Array.isArray(manifest.files)) {
-      throw new RestoreRejectedError('manifest.json is not an AGT Event Calendar backup manifest.');
-    }
-    if (manifest.formatVersion > BACKUP_FORMAT_VERSION) {
-      throw new RestoreRejectedError(`The backup format version ${manifest.formatVersion} is newer than this application supports.`);
-    }
+    const manifest = parseManifest(parsed);
     const listed = new Map(manifest.files.map((file) => [file.path, file]));
     for (const name of byName.keys()) {
       if (name !== 'manifest.json' && !listed.has(name)) throw new RestoreRejectedError(`${name} is not listed in the manifest.`);
@@ -259,7 +323,12 @@ async function stageRestore(context: AppContext, zipPath: string): Promise<Stage
       db.prepare('DELETE FROM sessions').run();
 
       const count = (table: string) => (db.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n;
-      const admin = db.prepare('SELECT username FROM admin WHERE id = 1').get() as { username: string } | undefined;
+      const admin = db.prepare('SELECT username, password_hash FROM admin WHERE id = 1').get() as
+        { username: string; password_hash: string } | undefined;
+      // A hash that fails AUTH-2 could never sign in (BAK-3).
+      if (admin && parseStoredHash(admin.password_hash) === null) {
+        throw new RestoreRejectedError('The backup\'s admin password hash is malformed or uses unsupported scrypt parameters.');
+      }
       const currentConfig = context.config.rawText ?? '';
       report = {
         createdAt: manifest.createdAt,
@@ -303,48 +372,53 @@ export async function previewRestore(context: AppContext, zipPath: string): Prom
  * of the current state is taken first, and files are swapped by renaming so
  * that a failure leaves the instance as it was. config.yaml is never written.
  */
-export async function restoreBackup(context: AppContext, zipPath: string): Promise<RestoreReport> {
+export async function restoreBackup(context: AppContext, zipPath: string, options: { ownActivity?: number } = {}): Promise<RestoreReport> {
   const staged = await stageRestore(context, zipPath);
   try {
-    const preRestore = await createBackup(context, { keep: true, prefix: 'pre-restore-backup' });
-    staged.report.preRestoreBackup = path.basename(preRestore.path);
-
-    const { databaseFile, uploadsDir } = context.config;
-    const suffix = `.before-restore-${randomUUID()}`;
-    const oldDb = `${databaseFile}${suffix}`;
-    const oldUploads = `${uploadsDir}${suffix}`;
-    context.db.pragma('wal_checkpoint(TRUNCATE)');
-    context.db.close();
-    const moved: [string, string][] = [];
-    const move = (from: string, to: string) => {
-      renameSync(from, to);
-      moved.push([from, to]);
-    };
-    try {
-      for (const extra of ['-wal', '-shm']) rmSync(`${databaseFile}${extra}`, { force: true });
-      if (existsSync(databaseFile)) move(databaseFile, oldDb);
-      if (existsSync(uploadsDir)) move(uploadsDir, oldUploads);
-      move(staged.databaseFile, databaseFile);
-      move(staged.uploadsDir, uploadsDir);
-      context.db = openDatabase(databaseFile);
-    } catch (error) {
-      for (const [from, to] of moved.reverse()) {
-        try {
-          rmSync(from, { recursive: true, force: true });
-          renameSync(to, from);
-        } catch {
-          // Best effort; the pre-restore backup still exists.
-        }
-      }
-      context.db = openDatabase(databaseFile);
-      throw error;
-    }
-    // Restored data from before generated secrets existed gets its own key (ALT-2).
-    ensureAltchaKey(context.db);
-    rmSync(oldDb, { force: true });
-    rmSync(oldUploads, { recursive: true, force: true });
-    return staged.report;
+    return await context.operation.run('restore', () => swapIn(context, staged), options);
   } finally {
     rmSync(staged.dir, { recursive: true, force: true });
   }
+}
+
+/** Replaces the live data with a staged restore. Runs in the `restore` state, after every request has drained. */
+async function swapIn(context: AppContext, staged: StagedRestore): Promise<RestoreReport> {
+  const preRestore = await createBackup(context, { keep: true, prefix: 'pre-restore-backup' });
+  staged.report.preRestoreBackup = path.basename(preRestore.path);
+
+  const { databaseFile, uploadsDir } = context.config;
+  const suffix = `.before-restore-${randomUUID()}`;
+  const oldDb = `${databaseFile}${suffix}`;
+  const oldUploads = `${uploadsDir}${suffix}`;
+  context.db.pragma('wal_checkpoint(TRUNCATE)');
+  context.db.close();
+  const moved: [string, string][] = [];
+  const move = (from: string, to: string) => {
+    renameSync(from, to);
+    moved.push([from, to]);
+  };
+  try {
+    for (const extra of ['-wal', '-shm']) rmSync(`${databaseFile}${extra}`, { force: true });
+    if (existsSync(databaseFile)) move(databaseFile, oldDb);
+    if (existsSync(uploadsDir)) move(uploadsDir, oldUploads);
+    move(staged.databaseFile, databaseFile);
+    move(staged.uploadsDir, uploadsDir);
+    context.db = openDatabase(databaseFile);
+  } catch (error) {
+    for (const [from, to] of moved.reverse()) {
+      try {
+        rmSync(from, { recursive: true, force: true });
+        renameSync(to, from);
+      } catch {
+        // Best effort; the pre-restore backup still exists.
+      }
+    }
+    context.db = openDatabase(databaseFile);
+    throw error;
+  }
+  // Restored data from before generated secrets existed gets its own key (ALT-2).
+  asOperationOwner(() => ensureAltchaKey(context.db));
+  rmSync(oldDb, { force: true });
+  rmSync(oldUploads, { recursive: true, force: true });
+  return staged.report;
 }

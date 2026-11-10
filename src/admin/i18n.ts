@@ -3,6 +3,7 @@
 import type { Locale } from '../translations';
 
 const en = {
+  maintenanceNotice: 'Maintenance in progress. Retrying in a moment…',
   appVersion: 'Version {{version}}',
   title: 'Admin dashboard',
   viewSite: 'View calendar',
@@ -175,6 +176,7 @@ const en = {
 export type AdminTranslations = { [Key in keyof typeof en]: string };
 
 const fr: AdminTranslations = {
+  maintenanceNotice: 'Maintenance en cours. Nouvelle tentative dans un instant…',
   appVersion: 'Version {{version}}',
   title: 'Tableau de bord d’administration',
   viewSite: 'Voir le calendrier',
@@ -345,6 +347,7 @@ const fr: AdminTranslations = {
 };
 
 const de: AdminTranslations = {
+  maintenanceNotice: 'Wartung läuft. Neuer Versuch in Kürze…',
   appVersion: 'Version {{version}}',
   title: 'Admin-Dashboard',
   viewSite: 'Kalender ansehen',
@@ -515,6 +518,7 @@ const de: AdminTranslations = {
 };
 
 const es: AdminTranslations = {
+  maintenanceNotice: 'Mantenimiento en curso. Reintentando en un momento…',
   appVersion: 'Versión {{version}}',
   title: 'Panel de administración',
   viewSite: 'Ver calendario',
@@ -685,6 +689,7 @@ const es: AdminTranslations = {
 };
 
 const pt: AdminTranslations = {
+  maintenanceNotice: 'Manutenção em andamento. Tentando novamente em instantes…',
   appVersion: 'Versão {{version}}',
   title: 'Painel de administração',
   viewSite: 'Ver calendário',
@@ -855,6 +860,7 @@ const pt: AdminTranslations = {
 };
 
 const it: AdminTranslations = {
+  maintenanceNotice: 'Manutenzione in corso. Nuovo tentativo tra un momento…',
   appVersion: 'Versione {{version}}',
   title: 'Pannello di amministrazione',
   viewSite: 'Vedi calendario',
@@ -1025,6 +1031,7 @@ const it: AdminTranslations = {
 };
 
 const th: AdminTranslations = {
+  maintenanceNotice: 'กำลังปรับปรุงระบบ จะลองใหม่อีกครั้งในอีกสักครู่…',
   appVersion: 'เวอร์ชัน {{version}}',
   title: 'แดชบอร์ดผู้ดูแลระบบ',
   viewSite: 'ดูปฏิทิน',
@@ -1195,6 +1202,7 @@ const th: AdminTranslations = {
 };
 
 const zh: AdminTranslations = {
+  maintenanceNotice: '正在维护中，稍后将自动重试…',
   appVersion: '版本 {{version}}',
   title: '管理后台',
   viewSite: '查看日历',
@@ -1365,6 +1373,7 @@ const zh: AdminTranslations = {
 };
 
 const hi: AdminTranslations = {
+  maintenanceNotice: 'रखरखाव जारी है। कुछ ही क्षणों में फिर से प्रयास किया जाएगा…',
   appVersion: 'संस्करण {{version}}',
   title: 'व्यवस्थापक डैशबोर्ड',
   viewSite: 'कैलेंडर देखें',
@@ -1535,6 +1544,7 @@ const hi: AdminTranslations = {
 };
 
 const ja: AdminTranslations = {
+  maintenanceNotice: 'メンテナンス中です。まもなく再試行します…',
   appVersion: 'バージョン {{version}}',
   title: '管理ダッシュボード',
   viewSite: 'カレンダーを表示',
