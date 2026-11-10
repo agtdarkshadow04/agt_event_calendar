@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { apiRequest } from '../lib/client';
+import { apiDownload, apiRequest } from '../lib/client';
 import { formatTranslation } from '../translations';
 import { downloadBlob, errorMessage, useAdmin } from './context';
 
@@ -22,14 +22,23 @@ export function BackupPanel({ onSessionEnded }: { onSessionEnded: (notice: strin
   const [confirmed, setConfirmed] = useState(false);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
 
-  const download = () => {
+  // Fetched rather than followed as a link, so the request carries the app's
+  // client header and the audit log attributes it to the dashboard (LOG-13).
+  const download = async () => {
     if (!window.confirm(t.backupWarning)) return;
-    const link = document.createElement('a');
-    link.href = '/api/admin/backup';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    setDownloading(true);
+    setDownloadError('');
+    try {
+      const { blob, fileName } = await apiDownload('/api/admin/backup', 'agt-event-calendar-backup.zip');
+      downloadBlob(blob, fileName);
+    } catch (error) {
+      setDownloadError(errorMessage(error));
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const send = async (action: 'preview' | 'restore') => {
@@ -61,8 +70,12 @@ export function BackupPanel({ onSessionEnded }: { onSessionEnded: (notice: strin
         <p>{t.backupIntro}</p>
         <p className="admin-notice">{t.backupWarning}</p>
         <div className="admin-toolbar">
-          <button className="button button-primary" type="button" onClick={download}>{t.downloadBackup}</button>
+          <button className="button button-primary" type="button" disabled={downloading} onClick={() => void download()}>
+            {t.downloadBackup}
+          </button>
+          {downloading && <span className="loading-note" role="status">{t.preparingBackup}</span>}
         </div>
+        {downloadError && <p className="error-note" role="alert">{downloadError}</p>}
       </section>
 
       <section className="admin-panel" aria-labelledby="restore-title">
