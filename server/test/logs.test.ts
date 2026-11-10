@@ -79,7 +79,7 @@ describe('audit log', () => {
       const response = await test.app.inject({ method: route.method as 'GET', url: concrete(route.url), headers: CSRF });
       const before = counted(response.statusCode) - 1;
       assert.ok(before >= 0, `anonymous ${route.method} ${route.url} wrote an audit entry`);
-      if (route.url.startsWith('/api/admin/') && route.url !== '/api/admin/login' && route.url !== '/api/admin/logout') {
+      if (route.url.startsWith('/api/admin/') && route.url !== '/api/admin/login') {
         assert.equal(response.statusCode, 401);
         assert.equal(outcomeFor(response.statusCode), 'denied');
       }
@@ -88,7 +88,7 @@ describe('audit log', () => {
     // Signed in but without the CSRF header: denied (403).
     const cookie = await setupAdmin(test);
     for (const route of audited.filter((candidate) => candidate.method !== 'GET' && candidate.url.startsWith('/api/admin/')
-      && candidate.url !== '/api/admin/login' && candidate.url !== '/api/admin/logout')) {
+      && candidate.url !== '/api/admin/login')) {
       const action = operationId(route.method, route.url);
       const before = auditTotal(test, action, 'denied', 403);
       const response = await test.app.inject({ method: route.method as 'POST', url: concrete(route.url), headers: { cookie } });
