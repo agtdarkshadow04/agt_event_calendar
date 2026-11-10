@@ -38,7 +38,8 @@ function ReportList({ title, items }: { title: string; items: string[] }) {
 }
 
 export function MigratePanel() {
-  const { t } = useAdmin();
+  const admin = useAdmin();
+  const { t } = admin;
   const [file, setFile] = useState<File | null>(null);
   const [onExisting, setOnExisting] = useState<'skip' | 'overwrite'>('skip');
   const [report, setReport] = useState<MigrationReport | null>(null);
@@ -59,7 +60,7 @@ export function MigratePanel() {
       if (!result.dryRun) setMessage(t.importComplete);
     } catch (error) {
       setReport(null);
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, admin));
     } finally {
       setBusy(false);
     }

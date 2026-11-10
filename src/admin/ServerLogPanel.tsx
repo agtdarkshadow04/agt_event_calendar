@@ -34,7 +34,8 @@ const levelTone = (level: Level): LogTone => (level === 'error' || level === 'fa
 
 /** Server log: events the server recorded by itself. The admin can filter, export and clear it. */
 export function ServerLogPanel({ onCleared }: { onCleared: () => void }) {
-  const { t } = useAdmin();
+  const admin = useAdmin();
+  const { t } = admin;
   const [draft, setDraft] = useState(EMPTY_FILTERS);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [reloadKey, setReloadKey] = useState(0);
@@ -58,7 +59,7 @@ export function ServerLogPanel({ onCleared }: { onCleared: () => void }) {
       setReloadKey((key) => key + 1);
       onCleared();
     } catch (failure) {
-      setNotice({ error: true, text: errorMessage(failure) });
+      setNotice({ error: true, text: errorMessage(failure, admin) });
     }
   };
   const set = (key: keyof typeof EMPTY_FILTERS, value: string) => setDraft({ ...draft, [key]: value });

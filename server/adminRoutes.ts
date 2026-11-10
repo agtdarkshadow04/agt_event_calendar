@@ -6,6 +6,7 @@ import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { EVENT_STATUSES, isUuidV4, validateChangeLogInput, validateEventInput, validateHolidayInput } from '../src/lib/validation';
 import type { EventStatus } from '../src/lib/validation';
+import { fieldError } from '../src/lib/errors';
 import { changedFields, setAudit } from './audit';
 import { CSRF_HEADER, endSession, hasValidSession, recoverySessionOf, requireCsrfHeader, startSession } from './session';
 import { discardBackup, downloadBackup, previewRestore, restoreBackup } from './backup';
@@ -57,7 +58,7 @@ function coverImageIdFrom(context: AppContext, body: Record<string, unknown>): s
   if (value === null || value === undefined || value === '') return null;
   if (typeof value !== 'string' || !isUuidV4(value) || !getImage(context.db, value.toLowerCase())) {
     throw new HttpError(400, 'validation_failed', 'The selected cover image does not exist.', [
-      { field: 'coverImageId', message: 'The selected cover image does not exist.' },
+      fieldError('coverImageId', 'image_not_found', 'Cover image'),
     ]);
   }
   return value.toLowerCase();
@@ -115,9 +116,8 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
       throw new HttpError(401, 'invalid_credentials', 'The current password is incorrect.');
     }
     if (request.body.newPassword.length < MIN_PASSWORD_LENGTH) {
-      throw new HttpError(400, 'validation_failed', `The new password must have at least ${MIN_PASSWORD_LENGTH} characters.`, [
-        { field: 'newPassword', message: `The new password must have at least ${MIN_PASSWORD_LENGTH} characters.` },
-      ]);
+      const error = fieldError('newPassword', 'too_short', 'The new password', { min: MIN_PASSWORD_LENGTH });
+      throw new HttpError(400, 'validation_failed', error.message, [error]);
     }
     updateAdminPassword(context.db, await hashPassword(request.body.newPassword));
     deleteAllSessions(context.db);
@@ -475,7 +475,8 @@ export async function registerAdminRoutes(fastify: FastifyInstance, context: App
         throw new HttpError(400, 'unknown_setting', `${key} is not a setting that can be changed from the dashboard.`);
       }
       if (isDefinedInConfig(context, key)) {
-        throw new HttpError(409, 'defined_in_config', `${key} is defined in the configuration file and cannot be changed from the dashboard.`);
+        throw new HttpError(409, 'defined_in_config',
+          `${key} is defined in the configuration file and cannot be changed from the dashboard.`, undefined, { key });
       }
       if (value !== null && !Value.Check(EDITABLE_SETTINGS[key as SettingKey].schema, value)) {
         throw new HttpError(400, 'invalid_setting', `${key} has an invalid value.`);

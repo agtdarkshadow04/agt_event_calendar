@@ -14,7 +14,8 @@ interface AdminImage {
 }
 
 export function ImagesPanel() {
-  const { t, pt } = useAdmin();
+  const admin = useAdmin();
+  const { t, pt } = admin;
   const [images, setImages] = useState<AdminImage[]>([]);
   const [message, setMessage] = useState('');
   const [version, setVersion] = useState(0);
@@ -23,7 +24,7 @@ export function ImagesPanel() {
     try {
       setImages(await apiRequest<AdminImage[]>('/api/admin/images'));
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, admin));
     }
   }, []);
 
@@ -38,7 +39,7 @@ export function ImagesPanel() {
       setVersion((value) => value + 1);
       await load();
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, admin));
     }
   };
 

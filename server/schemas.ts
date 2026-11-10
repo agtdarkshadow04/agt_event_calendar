@@ -11,6 +11,7 @@
 import { Type } from '@sinclair/typebox';
 import type { Static, TSchema } from '@sinclair/typebox';
 import { EVENT_STATUSES } from '../src/lib/validation';
+import { ADMIN_ERROR_CODES, ERROR_CODES, FIELD_CODES } from '../src/lib/errors';
 
 const Nullable = <T extends TSchema>(schema: T) => Type.Union([schema, Type.Null()]);
 const Uuid = Type.String({ format: 'uuid', description: 'Lowercase RFC 9562 version 4 UUID.' });
@@ -21,14 +22,26 @@ const ShortText = Type.String({ maxLength: 10_000 });
 
 // ------------------------------------------------------------------ shared
 
-export const FieldErrorSchema = Type.Object({ field: Type.String(), message: Type.String() });
+const codeList = (codes: readonly string[]) => codes.map((code) => `\`${code}\``).join(', ');
+const ParamsSchema = Type.Record(Type.String(), Type.Union([Type.String(), Type.Number(), Type.Boolean()]));
+
+/** A field-level validation error, also used for `notices` (API-2, API-6). */
+export const FieldErrorSchema = Type.Object({
+  field: Type.String({ description: 'The request property; dotted for nested ones (`links.2`).' }),
+  code: Type.String({ description: `Field code: ${codeList(FIELD_CODES)}. Clients translate it (I18N-6).` }),
+  message: Type.String({ description: 'English text; clients show it only for a code they do not know.' }),
+  params: Type.Optional(ParamsSchema),
+}, { description: 'Field error or notice.' });
 
 export const ErrorBodySchema = Type.Object({
-  error: Type.String({ description: 'Stable snake_case error code.' }),
-  message: Type.String({ description: 'English, human-readable message.' }),
-  fields: Type.Optional(Type.Array(FieldErrorSchema, { description: 'Per-field validation errors.' })),
+  error: Type.String({
+    description: `Stable snake_case error code: ${codeList([...ERROR_CODES, ...ADMIN_ERROR_CODES])}. Clients translate it (I18N-6).`,
+  }),
+  message: Type.String({ description: 'English, human-readable message; clients show it only for a code they do not know.' }),
+  fields: Type.Optional(Type.Array(FieldErrorSchema, { description: 'Per-field errors, for `validation_failed`.' })),
   params: Type.Optional(Type.Record(Type.String(), Type.Union([Type.String(), Type.Number(), Type.Boolean()]), {
-    description: 'Values the message needs, e.g. `{ retryAfterSeconds }` for `maintenance` (the `Retry-After` header is sent too).',
+    description: 'Values the translated text needs: `{ retryAfterSeconds }` for `rate_limited` and `maintenance` (with a '
+      + '`Retry-After` header), `{ maxBytes }` for `file_too_large` and `field_too_large`, `{ key }` for `defined_in_config`.',
   })),
 }, { description: 'Error response.' });
 

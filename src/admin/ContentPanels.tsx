@@ -4,7 +4,7 @@ import type { AdminApiChangeLogEntry, AdminApiHoliday } from '../lib/api';
 import { ApiError, apiRequest } from '../lib/client';
 import { splitChanges } from '../lib/validation';
 import type { FieldError } from '../lib/validation';
-import { errorMessage, useAdmin } from './context';
+import { errorMessage, fieldMessage, useAdmin } from './context';
 
 interface Column<T> { label: string; render: (item: T) => ReactNode }
 interface FieldSpec { key: string; label: string; type?: 'text' | 'date' | 'textarea'; help?: string }
@@ -20,7 +20,8 @@ function ContentPanel<T extends { id: string; published: boolean }>({
   empty: Record<string, string>;
   newLabel: string;
 }) {
-  const { t } = useAdmin();
+  const admin = useAdmin();
+  const { t } = admin;
   const [items, setItems] = useState<T[]>([]);
   const [editing, setEditing] = useState<{ id: string | null; values: Record<string, string>; published: boolean } | null>(null);
   const [errors, setErrors] = useState<FieldError[]>([]);
@@ -30,7 +31,7 @@ function ContentPanel<T extends { id: string; published: boolean }>({
     try {
       setItems(await apiRequest<T[]>(endpoint));
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, admin));
     }
   }, [endpoint]);
 
@@ -52,7 +53,7 @@ function ContentPanel<T extends { id: string; published: boolean }>({
       await load();
     } catch (error) {
       if (error instanceof ApiError && error.fields) setErrors(error.fields);
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, admin));
     }
   };
 
@@ -62,7 +63,7 @@ function ContentPanel<T extends { id: string; published: boolean }>({
       await apiRequest(`${endpoint}/${item.id}`, { method: 'PUT', json: { ...values, published } });
       await load();
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, admin));
     }
   };
 
@@ -72,7 +73,7 @@ function ContentPanel<T extends { id: string; published: boolean }>({
       await apiRequest(`${endpoint}/${item.id}`, { method: 'DELETE' });
       await load();
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, admin));
     }
   };
 
@@ -91,7 +92,7 @@ function ContentPanel<T extends { id: string; published: boolean }>({
         <form className="admin-form" onSubmit={(event) => void save(event)} noValidate>
           <div className="form-grid">
             {fields.map((field) => {
-              const error = errors.filter((item) => item.field === field.key).map((item) => item.message).join(' ');
+              const error = errors.filter((item) => item.field === field.key).map((item) => fieldMessage(item, field.label, admin)).join(' ');
               const common = {
                 value: editing.values[field.key] ?? '',
                 onChange: (change: { target: { value: string } }) =>

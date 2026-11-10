@@ -10,6 +10,7 @@ import { ApiError, apiRequest } from '../lib/client';
 import { LIMITS, validateAgtUsername, validateEventInput } from '../lib/validation';
 import type { FieldError } from '../lib/validation';
 import { formatTranslation, getTranslations } from '../translations';
+import { errorText, fieldError, fieldErrorText } from '../lib/errors';
 
 interface SubmitEventModalProps {
   locale: string;
@@ -43,7 +44,7 @@ export default function SubmitEventModal({
     const user = validateAgtUsername(username, translations);
     const fieldErrors = [...(checked.ok ? [] : checked.errors), ...(user.ok ? [] : user.errors)];
     if (cover && cover.size > maxImageBytes) {
-      fieldErrors.push({ field: 'cover', message: formatTranslation(translations.imageTooLarge, { size: megabytes(maxImageBytes) }) });
+      fieldErrors.push(fieldError('cover', 'file_too_large', translations.coverImage, { maxBytes: maxImageBytes }, translations));
     }
     setErrors(fieldErrors);
     if (fieldErrors.length > 0) {
@@ -69,7 +70,7 @@ export default function SubmitEventModal({
       setCover(null);
       formRef.current?.reset();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorText(error, translations);
       if (error instanceof ApiError && error.fields) setErrors(error.fields);
       setState({ kind: 'error', message: formatTranslation(translations.submissionFailed, { message }) });
       const widget = formRef.current?.querySelector('altcha-widget') as (HTMLElement & { reset?: () => void }) | null;
@@ -77,8 +78,10 @@ export default function SubmitEventModal({
     }
   };
 
-  const usernameError = errors.filter((error) => error.field === 'agtUsername').map((error) => error.message).join(' ');
-  const coverError = errors.filter((error) => error.field === 'cover').map((error) => error.message).join(' ');
+  const textFor = (field: string, label: string) => errors
+    .filter((error) => error.field === field).map((error) => fieldErrorText(error, label, translations)).join(' ');
+  const usernameError = textFor('agtUsername', translations.agtUsername);
+  const coverError = textFor('cover', translations.coverImage);
 
   return (
     <div

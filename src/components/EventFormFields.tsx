@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import type { ApiEvent } from '../lib/api';
 import { localInputToUtcIso, utcIsoToLocalInput } from '../lib/datetime';
 import { LIMITS } from '../lib/validation';
-import type { FieldError } from '../lib/validation';
+import { fieldErrorText } from '../lib/errors';
+import type { FieldError } from '../lib/errors';
 import { formatTranslation } from '../translations';
 import type { Translations } from '../translations';
 import { PortalGlyphs } from './PortalGlyphs';
@@ -74,7 +75,10 @@ interface EventFormFieldsProps {
 
 export function EventFormFields({ value, onChange, errors, translations, timeZone, timeZoneOffset }: EventFormFieldsProps) {
   const id = useId();
-  const errorFor = (field: string) => errors.filter((error) => error.field === field).map((error) => error.message).join(' ');
+  // Every error is shown in the form's language, whether the browser or the server found it (I18N-6).
+  const errorFor = (field: string, label: string) => errors
+    .filter((error) => error.field === field || error.field.startsWith(`${field}.`))
+    .map((error) => fieldErrorText(error, label, translations)).join(' ');
   const set = (key: keyof EventFormState) => (event: { target: { value: string } }) => onChange({ ...value, [key]: event.target.value });
   const utc = (local: string) => {
     const iso = localInputToUtcIso(local, timeZoneOffset);
@@ -89,7 +93,7 @@ export function EventFormFields({ value, onChange, errors, translations, timeZon
       required?: boolean; maxLength?: number; placeholder?: string; help?: string; className?: string; preview?: ReactNode;
     } = {},
   ) => {
-    const error = errorFor(field);
+    const error = errorFor(field, label);
     return (
       <label className={`field ${options.className ?? ''}`}>
         <span>{label}{options.required ? ' *' : ` (${translations.optional})`}</span>
@@ -110,7 +114,7 @@ export function EventFormFields({ value, onChange, errors, translations, timeZon
   };
 
   const dateTime = (key: 'startLocal' | 'endLocal', field: 'start' | 'end', label: string, required: boolean) => {
-    const error = errorFor(field);
+    const error = errorFor(field, label);
     return (
       <label className="field">
         <span>{label}{required ? ' *' : ` (${translations.optional})`}</span>
@@ -128,8 +132,8 @@ export function EventFormFields({ value, onChange, errors, translations, timeZon
     );
   };
 
-  const descriptionError = errorFor('description');
-  const linksError = errorFor('links');
+  const descriptionError = errorFor('description', translations.descriptionMarkdown);
+  const linksError = errorFor('links', translations.relatedLinks);
   return (
     <div className="form-grid">
       {text('name', 'name', translations.eventName, { required: true, maxLength: LIMITS.name, className: 'span-2' })}

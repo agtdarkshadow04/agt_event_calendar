@@ -29,7 +29,8 @@ const TABS = [
 type Tab = (typeof TABS)[number];
 
 function SetupScreen({ configured, onDone }: { configured: boolean; onDone: () => void }) {
-  const { t } = useAdmin();
+  const admin = useAdmin();
+  const { t } = admin;
   const [form, setForm] = useState({ setupPassword: '', username: '', password: '', confirm: '' });
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -47,7 +48,7 @@ function SetupScreen({ configured, onDone }: { configured: boolean; onDone: () =
       });
       onDone();
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, admin));
     } finally {
       setBusy(false);
     }
@@ -81,7 +82,8 @@ function SetupScreen({ configured, onDone }: { configured: boolean; onDone: () =
 }
 
 function LoginScreen({ onDone, notice }: { onDone: () => void; notice: string }) {
-  const { t } = useAdmin();
+  const admin = useAdmin();
+  const { t } = admin;
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
@@ -93,7 +95,7 @@ function LoginScreen({ onDone, notice }: { onDone: () => void; notice: string })
       await apiRequest('/api/admin/login', { method: 'POST', json: { username, password } });
       onDone();
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(errorMessage(error, admin));
     } finally {
       setBusy(false);
     }
@@ -144,7 +146,13 @@ export function AdminApp() {
 
   const refresh = useCallback(async () => {
     try {
-      const status = await apiRequest<{ adminExists: boolean; setupPasswordConfigured: boolean }>('/api/setup/status');
+      // While a restore is failed, only the recovery session's session check gets through (BAK-11), so a
+      // maintenance answer here means the admin exists.
+      const status = await apiRequest<{ adminExists: boolean; setupPasswordConfigured: boolean }>('/api/setup/status')
+        .catch((error: unknown) => {
+          if (error instanceof ApiError && error.code === 'maintenance') return { adminExists: true, setupPasswordConfigured: false };
+          throw error;
+        });
       if (!status.adminExists) {
         setPhase({ kind: 'setup', setupPasswordConfigured: status.setupPasswordConfigured });
         return;
@@ -162,9 +170,9 @@ export function AdminApp() {
         else throw error;
       }
     } catch (error) {
-      setPhase({ kind: 'error', message: errorMessage(error) });
+      setPhase({ kind: 'error', message: errorMessage(error, context) });
     }
-  }, []);
+  }, [context]);
 
   useEffect(() => {
     void refresh();

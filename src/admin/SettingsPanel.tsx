@@ -16,7 +16,8 @@ interface SettingState {
  * server also rejects changes to them (409), so this is only a convenience.
  */
 export function SettingsPanel() {
-  const { t } = useAdmin();
+  const admin = useAdmin();
+  const { t } = admin;
   const [states, setStates] = useState<SettingState[]>([]);
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [message, setMessage] = useState<{ error: boolean; text: string }>({ error: false, text: '' });
@@ -27,7 +28,7 @@ export function SettingsPanel() {
       setStates(result);
       setDraft({});
     } catch (error) {
-      setMessage({ error: true, text: errorMessage(error) });
+      setMessage({ error: true, text: errorMessage(error, admin) });
     }
   }, []);
 
@@ -41,7 +42,7 @@ export function SettingsPanel() {
       setDraft({});
       setMessage({ error: false, text: t.saved });
     } catch (error) {
-      setMessage({ error: true, text: errorMessage(error) });
+      setMessage({ error: true, text: errorMessage(error, admin) });
     }
   };
 

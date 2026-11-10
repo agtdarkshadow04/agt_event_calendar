@@ -24,7 +24,8 @@ const EXTENSION_TYPES: Record<string, ImageMime> = {
 };
 
 export class ImageRejectedError extends Error {
-  constructor(message: string, readonly statusCode = 415) {
+  /** `maxBytes`: set for an image over the size limit, which is answered as `413 file_too_large` (API-6). */
+  constructor(message: string, readonly statusCode = 415, readonly maxBytes?: number) {
     super(message);
   }
 }
@@ -63,7 +64,7 @@ export function validateImage(
   const maxBytes = Math.min(options.maxBytes ?? MAX_IMAGE_BYTES, MAX_IMAGE_BYTES);
   if (data.length === 0) throw new ImageRejectedError('The image file is empty.', 400);
   if (data.length > maxBytes) {
-    throw new ImageRejectedError(`The image is larger than the ${formatMegabytes(maxBytes)} limit.`, 413);
+    throw new ImageRejectedError(`The image is larger than the ${formatMegabytes(maxBytes)} limit.`, 413, maxBytes);
   }
   const detected = detectImageType(data);
   if (!detected) {

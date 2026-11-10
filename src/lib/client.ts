@@ -1,13 +1,17 @@
 import type { ApiErrorBody } from './api';
 import { withMaintenanceRetry } from './maintenance';
 
-/** Error thrown for non-2xx API responses, carrying the server's message. */
+/**
+ * Error thrown for non-2xx API responses: the `error` code, its `params` and field errors, and the server's English
+ * message. Show it with `errorText()` / `fieldErrorText()` from `./errors` (I18N-6), never `message` directly.
+ */
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
     readonly code: string | null = null,
     readonly fields: ApiErrorBody['fields'] = undefined,
+    readonly params: ApiErrorBody['params'] = undefined,
   ) {
     super(message);
   }
@@ -29,7 +33,7 @@ async function errorFrom(response: Response): Promise<ApiError> {
   } catch {
     body = {};
   }
-  return new ApiError(response.status, body.message ?? `HTTP ${response.status}`, body.error ?? null, body.fields);
+  return new ApiError(response.status, body.message ?? `HTTP ${response.status}`, body.error ?? null, body.fields, body.params);
 }
 
 /**
@@ -61,7 +65,7 @@ export async function apiRequest<T>(
   }
   if (!response.ok) {
     const body = (data ?? {}) as Partial<ApiErrorBody>;
-    throw new ApiError(response.status, body.message ?? `HTTP ${response.status}`, body.error ?? null, body.fields);
+    throw new ApiError(response.status, body.message ?? `HTTP ${response.status}`, body.error ?? null, body.fields, body.params);
   }
   return data as T;
 }
